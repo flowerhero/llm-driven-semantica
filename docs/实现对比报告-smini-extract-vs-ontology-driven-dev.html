@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>实现对比报告 · smini-extract vs ontology-driven-dev</title>
+<style>
+  :root{
+    --bg:#F4F3EE; --card:#FFFFFF; --border:#E4E3DD; --text:#1A1B1C; --text2:#6B7280;
+    --accent:#3E7CB1; --accent2:#16A085; --warn:#B7791F; --red:#B83227; --purple:#8E44AD;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--text); font-family:'Roboto','PingFang SC','Segoe UI',Arial,sans-serif; line-height:1.65; padding:32px 20px;}
+  .wrap{max-width:1080px; margin:0 auto;}
+  h1{font-size:24px; font-weight:600; margin-bottom:4px;}
+  .sub{color:var(--text2); font-size:13.5px; margin-bottom:24px;}
+  h2{font-size:18px; font-weight:600; margin:28px 0 12px; padding-left:10px; border-left:4px solid var(--accent);}
+  h3{font-size:15px; font-weight:600; margin:18px 0 8px;}
+  p{font-size:13.5px; margin-bottom:8px;}
+  .card{background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:14px;}
+  table{width:100%; border-collapse:collapse; font-size:12.5px; background:var(--card); border-radius:10px; overflow:hidden; margin-bottom:14px;}
+  th{background:#EEF2F6; text-align:left; padding:8px 10px; font-weight:600; border-bottom:1px solid var(--border);}
+  td{padding:8px 10px; border-bottom:1px solid var(--border); vertical-align:top;}
+  tr:last-child td{border-bottom:none;}
+  .tag{display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px; margin-right:6px; font-weight:600;}
+  .t-mine{background:#DCEBFA; color:#1F5A8A;}
+  .t-theirs{background:#DDF0EA; color:#0F6B52;}
+  .t-both{background:#F3EAD7; color:#7A5A12;}
+  .kpi{display:flex; flex-wrap:wrap; gap:12px; margin-bottom:14px;}
+  .kpi .box{flex:1; min-width:150px; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; text-align:center;}
+  .kpi .num{font-size:22px; font-weight:700; color:var(--accent);}
+  .kpi .lbl{font-size:12px; color:var(--text2); margin-top:2px;}
+  .good{color:var(--accent2); font-weight:600;}
+  .bad{color:var(--red); font-weight:600;}
+  ul{margin:4px 0 10px 20px; font-size:13.5px;}
+  li{margin-bottom:4px;}
+  .verdict{background:#F7F9FC; border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-top:8px;}
+  .small{font-size:12px; color:var(--text2);}
+  code{background:#EEF0F2; padding:1px 5px; border-radius:4px; font-size:12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>实现对比报告：smini-extract（我方） vs ontology-driven-dev（对方）</h1>
+<div class="sub">对比范围：<code>skills/smini-extract</code>（当前工作目录实现，契约即规则架构）与 <code>ontology-driven-dev-main/</code>（他人实现的本体驱动开发框架）· 只对比不修改 · 2026-09-06</div>
+
+<div class="kpi">
+  <div class="box"><div class="num">11</div><div class="lbl">我方抽取通道（十一件套）</div></div>
+  <div class="box"><div class="num">7</div><div class="lbl">对方本体模型（M1/M2/M3/M5/M6/M7/MU）</div></div>
+  <div class="box"><div class="num">7353</div><div class="lbl">我方 Python 代码（行）</div></div>
+  <div class="box"><div class="num">5817+9343</div><div class="lbl">对方规范行数 + 样例前后端行数</div></div>
+  <div class="box"><div class="num">0</div><div class="lbl">我方外部依赖</div></div>
+  <div class="box"><div class="num">4</div><div class="lbl">对方技术栈件数（Flask/SQLite/React/simpleeval）</div></div>
+</div>
+
+<h2>一、核心结论</h2>
+<div class="card">
+<p><b>两者是"本体工程"的一体两端，不是同一件事的两套做法。</b></p>
+<ul>
+  <li><span class="tag t-mine">我方 smini-extract</span><b>抽取（读）</b>：把任意文本文档语义化为<b>本体素材</b>（实体-关系-属性-规则-流程 + 预测决策六件套），产出 JSON + 自包含 HTML 查看器。目标是"让文档成为可查询、可验证的知识图谱素材"。</li>
+  <li><span class="tag t-theirs">对方 ontology-driven-dev</span><b>生成（建）</b>：把业务需求经<b>八阶段人工门禁</b>确认成需求规格说明书，再建模为<b>七模型 YAML（可执行规格）</b>，最终由内置 code-paas 底座生成<b>可运行的全栈业务系统</b>（Flask + SQLite + React，含流程引擎、权限、AI 对话框）。目标是"让需求变成系统"。</li>
+  <li><b>共同点</b>：都封装"本体驱动"方法论为 Skill；都由宿主 agent 充当 LLM（不依赖专用模型服务/API key）；都以结构化契约（JSON / YAML）作为"LLM 语义层"与"确定性代码层"的分界；都强调溯源与一致性验证。</li>
+</ul>
+</div>
+
+<h2>二、方法论与管线对比</h2>
+<div class="card">
+<table>
+<tr><th style="width:18%">维度</th><th style="width:41%"><span class="tag t-mine">我方 smini-extract</span></th><th><span class="tag t-theirs">对方 ontology-driven-dev</span></th></tr>
+<tr><td>总方法论</td><td>四步管线：normalize → <b>宿主 LLM 交卷</b> → 薄壳映射 → build KG / 渲染</td><td>三阶段强顺序：需求探索 → 本体建模 → 应用构建</td></tr>
+<tr><td>阶段内流程</td><td>单轮抽取（十一件套并行），无子阶段</td><td>阶段一内部再分 8 子阶段（总体理解→业务对象→功能规则→跨对象联动→协同/审批流→查询报表→角色权限→UI 原型）</td></tr>
+<tr><td>人工介入</td><td><b>无门禁</b>：宿主一次交卷，事后 validate 兜底</td><td><b>强门禁</b>：8 个阶段每阶段硬暂停，按"问题+AI建议+理由+选项+快捷回复"等人确认；B 类（企业专属）内容未确认不得推进</td></tr>
+<tr><td>确定性代码职责</td><td>薄壳映射 + 惰性锚点（ID 补算、span 尽力 find、枚举非法兜底、去重）；<b>零抽取规则</b></td><td>完整执行引擎：M1→DDL、M3→simpleeval 规则引擎、M5→权限种子、M6→流程引擎、MU→页面路由</td></tr>
+<tr><td>产出</td><td><code>04-extraction.json</code> + 同名 <code>.html</code> 查看器（12 Tab）</td><td>需求规格说明书 + <code>yaml/</code> 七模型 + <code>code-app/</code> 可运行系统</td></tr>
+</table>
+</div>
+
+<h2>三、本体建模模型对比（核心差异）</h2>
+<div class="card">
+<table>
+<tr><th style="width:20%">关注面</th><th style="width:40%"><span class="tag t-mine">十一件套契约（JSON）</span></th><th><span class="tag t-theirs">七模型 YAML</span></th></tr>
+<tr><td>对象/实体</td><td>扁平实体表 <code>{surface, canonical, type}</code>，19 类封闭枚举（12 通用 + 7 金融扩展）</td><td>M1 对象模型：DDD 聚合根/子实体、<code>AggregateRootRef</code> 外键、<code>DictionaryRef</code> 字典、生命周期状态、唯一约束</td></tr>
+<tr><td>行为/功能</td><td>（无独立通道；操作并入关系/规则）</td><td>M2 行为模型：行为 ID、triggerType（USER_ACTION/SYSTEM/…）、前后置条件、syncTriggers 跨对象联动</td></tr>
+<tr><td>规则</td><td>rules：<code>{subject, condition, action, modality}</code>，condition/action 为<b>自然语言字符串</b>，modality 5 类枚举（对齐 SWRL 骨架 + 道义逻辑）</td><td>M3 规则模型：<code>inputParams</code> + <b>simpleeval 可执行表达式</b>（如 <code>totalAmount &gt;= 1000000</code>），<code>reusedBy</code> 声明被哪些行为复用</td></tr>
+<tr><td>流程</td><td>processes：steps（label/kind/actor）+ flows（from/to 下标、SEQUENCE/PARALLEL/CONDITIONAL/LOOP）</td><td>M6 流程模型：activities（START/USER_TASK/GATEWAY/SYSTEM_TASK/SUB_FLOW_CALL）+ branches + roleRef/behaviorRef/ruleRef 交叉引用，可驱动流程引擎</td></tr>
+<tr><td>主体/权限</td><td>permissions：<code>{actor, action, effect, scope}</code>（PERMIT/DENY）</td><td>M5 主体模型：actors + roles + permissions 清单，直接生成系统管理种子与 <code>@require_permission</code> 接口保护</td></tr>
+<tr><td>查询/报表</td><td>（无；查询功能作为普通实体/概念）</td><td>M7 报表模型：查询条件/结果列/统计，且与 M2 QUERY 行为严格一对一</td></tr>
+<tr><td>界面</td><td>HTML 查看器（只读展示抽取结果）</td><td>MU UI 模型：菜单/页面/路由/布局规范，生成前端页面</td></tr>
+<tr><td>预测决策扩展</td><td><b>v6 六件套</b>：状态机（states）/函数指标（functions）/时态（temporal）/动作处置（actions）/约束（constraints）/授权（permissions）</td><td>（无对应独立通道；状态靠 M1 lifecycle + 行为状态变更 + syncTriggers 表达）</td></tr>
+</table>
+<p class="small">要点：对方模型的本质是<b>"可执行规格"</b>——每个模型都要能被确定性代码消费（建表、跑规则、走流程）；我方契约的本质是<b>"语义素材"</b>——每条记录都要能溯源回原文（evidence），供人阅读或知识图谱复用，不必可执行。</p>
+</div>
+
+<h2>四、LLM 角色与确定性边界</h2>
+<div class="card">
+<table>
+<tr><th style="width:18%">维度</th><th style="width:41%"><span class="tag t-mine">我方</span></th><th><span class="tag t-theirs">对方</span></th></tr>
+<tr><td>LLM 由谁充当</td><td>宿主 agent（豆包）经 <code>--host-contract</code> 一次性交卷；Python 不读 <code>SMINI_LLM_*</code>、不发 HTTP</td><td>宿主 agent（Claude Code / Codex / Cursor / WorkBuddy 通用）；AI 对话框的模型 API Key 由使用方自配</td></tr>
+<tr><td>LLM 职责</td><td><b>全部抽取语义</b>：实体判断、关系识别、属性归属、规则/流程/六件套判定</td><td><b>全部生成语义</b>：需求探索提问、规格编写、七模型 YAML 建模、代码实现</td></tr>
+<tr><td>确定性代码</td><td>只做映射与兜底（枚举校验、ID、span、去重），不承担任何语义判断</td><td>承担<b>执行</b>：规则求值（simpleeval）、流程推进、权限校验、DDL 生成</td></tr>
+<tr><td>失败行为</td><td>宿主未交卷 → 空结果 + 降级登记（<code>no_credential</code>），绝不造假</td><td>未确认 → 硬暂停，绝不越阶段；AI Key 未配置 → AI 对话框降级为不可用，系统其余功能正常</td></tr>
+</table>
+</div>
+
+<h2>五、溯源与验证机制</h2>
+<div class="card">
+<table>
+<tr><th style="width:18%">机制</th><th style="width:41%"><span class="tag t-mine">我方</span></th><th><span class="tag t-theirs">对方</span></th></tr>
+<tr><td>需求溯源</td><td>每条实体/关系/属性/规则/流程均带 <code>evidence</code>（原文短引用），薄壳尽力定位 span</td><td>每个功能可回溯到需求文档条目；需求规格对照《软件需求编写规范 V9.0》47 项自检</td></tr>
+<tr><td>一致性门禁</td><td>validate 命令：枚举合法性、引用完整性、下标越界丢弃</td><td>建模后核对：M2↔MU 互引、M7↔M2 一对一、M6 引用无环、规则条件结论不混写</td></tr>
+<tr><td>自动化测试</td><td>138 项单元测试（含 v6 预测决策 8 项）</td><td><code>smoke_test.py</code> 冒烟测试（独立临时 DB）+ 验收检查清单</td></tr>
+<tr><td>人工验收</td><td>HTML 查看器浏览器实机验收（12 Tab）</td><td>全链路联调：登录→录入→暂存/提交→多级审批→查询；AI 对话 SSE 流式验收</td></tr>
+</table>
+</div>
+
+<h2>六、规模与依赖</h2>
+<div class="card">
+<table>
+<tr><th style="width:24%">项目</th><th style="width:38%"><span class="tag t-mine">我方</span></th><th><span class="tag t-theirs">对方</span></th></tr>
+<tr><td>技能本体</td><td>SKILL.md（4KB）+ extraction-rules.md（24KB）+ 契约示例 + render_viewer.py</td><td>SKILL.md（11KB）+ 5 份规范（约 274KB / 5817 行）</td></tr>
+<tr><td>核心代码</td><td>smini 管线 7353 行 Python（纯标准库）</td><td>techbase 后端 2610 行 + 样例后端 4608 行 + 样例前端 4735 行（TS/TSX）</td></tr>
+<tr><td>测试</td><td>tests/ 2822 行、8 个测试文件（138 用例）</td><td>smoke_test.py + 验收清单</td></tr>
+<tr><td>外部依赖</td><td class="good">零依赖，开箱即用</td><td class="bad">Flask + SQLite + React/Vite + simpleeval + node_modules（npm/pip install）</td></tr>
+<tr><td>运行环境</td><td>任意 Python 3.10+</td><td>Python 3.10+ + Node 18+ + 首次联网安装</td></tr>
+</table>
+</div>
+
+<h2>七、逐维度优劣</h2>
+<div class="card">
+<h3><span class="tag t-mine">我方优势</span></h3>
+<ul>
+  <li><span class="good">轻量敏捷</span>：零外部依赖，单条命令端到端（build → validate → render），适合"拿到文档立刻知识化"。</li>
+  <li><span class="good">语义灵活</span>：契约即规则——抽取语义全部交给宿主 LLM，无正则/无模式清单，天然适应任意领域文本；19 类实体枚举（含 7 类金融扩展）直接服务金融场景。</li>
+  <li><span class="good">抽取深度</span>：十一件套（含 v6 状态机/函数/时态/动作/约束/授权六件套）直指本体驱动的<b>预测与决策</b>，这是对方没有的通道。</li>
+  <li><span class="good">证据可追溯</span>：每条产出带原文 evidence，validate 保证枚举/引用合法，138 单测兜底。</li>
+  <li><span class="good">可视化即读</span>：每次生成 JSON 同步产出自包含 HTML 查看器（关系图谱/状态机 SVG/流程 SVG/传导列），零依赖离线可开。</li>
+</ul>
+<h3><span class="tag t-mine">我方劣势</span></h3>
+<ul>
+  <li><span class="bad">产物不可执行</span>：rules 的 condition/action 是自然语言字符串，processes 是描述性步骤——不能跑，不能驱动任何运行时。</li>
+  <li><span class="bad">无领域建模深度</span>：实体扁平（无聚合/外键/字典/生命周期），没有行为模型与界面模型，<b>无法回答"系统怎么建"</b>。</li>
+  <li><span class="bad">无人工门禁</span>：抽取质量一次成型，错误依赖事后 validate/人工发现，高风险场景缺少需求确认缓冲。</li>
+  <li><span class="bad">类型封闭</span>：19 类实体枚举对超领域内容（如工程图纸、医疗文书）覆盖有限。</li>
+</ul>
+<h3><span class="tag t-theirs">对方优势</span></h3>
+<ul>
+  <li><span class="good">端到端真产物</span>：需求一句话 → 可运行 BS 系统（含流程引擎、权限、报表、AI 对话框），价值闭环最强。</li>
+  <li><span class="good">模型即可执行</span>：M1→建表、M3→simpleeval 规则可跑、M6→流程引擎、M5→权限种子——"模型一套、代码一套"被从机制上杜绝。</li>
+  <li><span class="good">需求质量可控</span>：8 阶段人工门禁 + A/B 类内容分级 + 47 项自检，企业级误判风险显著降低。</li>
+  <li><span class="good">可移植性强</span>：声明兼容 Claude Code / Codex / Cursor / WorkBuddy 多工具，自带 techbase 底座复制即用。</li>
+  <li><span class="good">七模型覆盖面</span>：对象/行为/规则/主体/流程/报表/UI 七面齐备，是完整应用工程语义。</li>
+</ul>
+<h3><span class="tag t-theirs">对方劣势</span></h3>
+<ul>
+  <li><span class="bad">重</span>：npm/pip 依赖、底座复制、构建周期长；对"把文档知识化"这类轻任务严重过载。</li>
+  <li><span class="bad">场景单向</span>：只服务"要建系统"；对已有系统文档（如理赔需求说明书）的语义抽取与知识沉淀无能为力。</li>
+  <li><span class="bad">表达受限于可执行性</span>：规则必须写成 simpleeval 表达式，模糊/叙述性规则（如"综合评估风险承受能力"）难以入模；M3 规则无法承载道义模态与开放性条件。</li>
+  <li><span class="bad">学习与遵循成本高</span>：5 份规范 274KB 强制遵循，新人上手门槛高。</li>
+  <li><span class="bad">人工成本高</span>：8 阶段硬暂停，小需求也要走完整确认链路。</li>
+</ul>
+</div>
+
+<h2>八、适用场景判定</h2>
+<div class="card">
+<table>
+<tr><th style="width:44%">场景</th><th style="width:28%">推荐</th><th>理由</th></tr>
+<tr><td>文档/报告/法规 → 本体知识图谱素材（实体-关系-属性-规则-流程）</td><td><span class="tag t-mine">我方</span></td><td>抽取型定位 + 证据溯源 + 金融扩展</td></tr>
+<tr><td>文档 → 预测/决策要素（状态机、函数指标、时态、动作、约束、授权）</td><td><span class="tag t-mine">我方</span></td><td>v6 六件套专属通道</td></tr>
+<tr><td>一段需求 → 可运行的管理系统</td><td><span class="tag t-theirs">对方</span></td><td>三阶段生成 + code-paas 底座</td></tr>
+<tr><td>需求 → 数据库表/接口/权限/流程/页面的完整工程规格</td><td><span class="tag t-theirs">对方</span></td><td>七模型可执行规格 + 一致性门禁</td></tr>
+<tr><td>已有系统文档 + 期望快速浏览结构化语义（如本项目的理赔需求说明书）</td><td><span class="tag t-mine">我方</span></td><td>对方无抽取通道，无法处理</td></tr>
+<tr><td>企业级新系统开发（需求不确定、需逐项确认）</td><td><span class="tag t-theirs">对方</span></td><td>8 阶段人工门禁天然适配</td></tr>
+</table>
+</div>
+
+<h2>九、互补性与演进建议</h2>
+<div class="card">
+<p>两者不冲突，可形成"<b>文档语义 → 系统构建</b>"的互补链路：</p>
+<ul>
+  <li><b>输入互补</b>：对方阶段一（需求探索）前，可用我方抽取已有业务文档/制度/历史需求，快速产出领域实体、规则、流程、权限基线，作为对方附录 C 建模输入基线的<b>候选种子</b>，压缩人工探索轮次。</li>
+  <li><b>通道互补</b>：我方的 rules（道义模态、开放式条件）可补对方 M3 规则（仅可执行表达式）覆盖不到的规范性内容；我方的 processes/states 可辅助对方 M6 流程与 M1 生命周期的初稿。</li>
+  <li><b>反向沉淀</b>：对方产出的系统（模型+代码）若需文档化/知识化，可用我方对其需求文档、模型 YAML 做抽取沉淀，形成可查询的知识资产。</li>
+  <li><b>架构同构启示</b>：双方殊途同归地选择了"宿主 LLM + 结构化契约 + 确定性消费层"的边界，说明这是 Skill 化本体工程的稳健范式；差异只在"契约是语义素材还是可执行规格"。</li>
+</ul>
+</div>
+
+<div class="verdict">
+<h3 style="margin-top:0">一句话结论</h3>
+<p><b>我方赢在"轻、深、可溯源"（把文档读成本体知识），对方赢在"全、实、可执行"（把需求建成真系统）；前者是本体工程的"读端"，后者是"建端"。若要二选一，取决于终点是"知识"还是"系统"；若要最大化价值，应让两者串联。</b></p>
+</div>
+
+</div>
+</body>
+</html>
