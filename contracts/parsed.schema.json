@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "parsed.schema.json",
+  "title": "Step 2 Parse 输出 · ParsedDocument（单文档）或 ParsedDocument[]（批次）",
+  "description": "从原始字节提取结构化文本与版式区块。语义：Parse/Normalize/Extract 都是逐文档操作（span 坐标系是文档内的），到 Build KG 才跨文档汇聚成一张图。故本契约默认描述单个 ParsedDocument；批次处理时顶层为数组，由 validate 逐元素校验。保真铁律：block.text 必须严格等于 text[char_start:char_end]；text 长度与原文偏差 > max(8, 5%) 即判定失败回退。",
+  "type": ["object", "array"],
+  "items": { "$ref": "#/definitions/ParsedDocument" },
+  "definitions": {
+    "ParsedDocument": {
+      "type": "object",
+      "required": ["doc_id", "format", "source", "text", "parser", "parser_version"],
+      "additionalProperties": false,
+      "properties": {
+        "doc_id": { "type": "string" },
+        "format": { "enum": ["pdf", "docx", "pptx", "xlsx", "html", "markdown", "text", "code", "json", "csv", "xml", "epub", "image", "audio", "unknown"] },
+        "source": { "type": "object", "description": "透传 Step1 的 SourceRef" },
+        "text": { "type": "string", "description": "全文档纯文本，所有 block 的 char_start/char_end 都以此为坐标系" },
+        "blocks": { "type": "array", "description": "版式区块。order 跨 kind 全局单调递增", "items": { "$ref": "#/definitions/Block" } },
+        "parser": { "type": "string", "description": "llm.v1 / deterministic.v1 / pdf.skill / unsupported" },
+        "parser_version": { "type": "string" },
+        "warnings": { "type": "array", "items": { "type": "string" } },
+        "metadata": { "type": "object" },
+        "degradations": { "type": "array", "description": "降级登记：保真校验失败回退确定性解析时必须登记，绝不静默", "items": { "$ref": "#/definitions/Degradation" } },
+        "stats": { "type": "object" }
+      }
+    },
+    "Degradation": {
+      "type": "object",
+      "required": ["component", "kind", "reason", "fallback", "impact"],
+      "additionalProperties": false,
+      "properties": {
+        "component": { "type": "string" },
+        "kind": { "enum": ["model_missing", "unavailable", "no_credential", "rate_limited", "parse_failed", "unsupported_format", "truncated"] },
+        "reason": { "type": "string" },
+        "fallback": { "type": "string" },
+        "impact": { "type": "string" },
+        "recoverable": { "type": "boolean", "default": true }
+      }
+    },
+    "Block": {
+      "type": "object",
+      "required": ["kind", "text", "order", "char_start", "char_end"],
+      "additionalProperties": false,
+      "properties": {
+        "block_id": { "type": "string", "description": "可由 Python 补算；LLM 可留空串" },
+        "kind": { "enum": ["paragraph", "heading", "table", "code", "list_item", "quote", "caption", "image_ref", "footnote", "metadata"], "description": "BlockKind 10 类封闭枚举，不得自创" },
+        "text": { "type": "string", "description": "必须严格等于父级 text[char_start:char_end]" },
+        "order": { "type": "integer", "minimum": 0, "description": "跨 kind 全局单调递增" },
+        "char_start": { "type": "integer", "minimum": 0 },
+        "char_end": { "type": "integer", "minimum": 0 },
+        "level": { "type": ["integer", "null"], "description": "仅 heading：标题层级 1-6" },
+        "rows": { "type": ["array", "null"], "description": "仅 table：必须解析出二维单元格", "items": { "type": "array", "items": { "type": "string" } } },
+        "language": { "type": ["string", "null"], "description": "仅 code：语言标识" },
+        "metadata": { "type": "object" }
+      }
+    }
+  }
+}
