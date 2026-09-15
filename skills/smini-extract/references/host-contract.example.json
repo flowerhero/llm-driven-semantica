@@ -1,0 +1,126 @@
+{
+  "entities": [
+    {"surface": "中国证券业协会", "canonical": "中国证券业协会", "type": "ORGANIZATION"},
+    {"surface": "证券经营机构", "canonical": "证券经营机构", "type": "ORGANIZATION"},
+    {"surface": "中国证监会", "canonical": "中国证监会", "type": "ORGANIZATION"},
+    {"surface": "证券公司", "canonical": "证券公司", "type": "ORGANIZATION"},
+    {"surface": "证券投资咨询机构", "canonical": "证券投资咨询机构", "type": "ORGANIZATION"},
+    {"surface": "《证券经营机构投资者适当性管理实施指引（试行）》", "canonical": "证券经营机构投资者适当性管理实施指引（试行）", "type": "REGULATION"},
+    {"surface": "《证券期货投资者适当性管理办法》", "canonical": "证券期货投资者适当性管理办法", "type": "REGULATION"},
+    {"surface": "《证券法》", "canonical": "证券法", "type": "REGULATION"},
+    {"surface": "《证券公司监督管理条例》", "canonical": "证券公司监督管理条例", "type": "REGULATION"},
+    {"surface": "投资者", "canonical": "投资者", "type": "CONCEPT"},
+    {"surface": "普通投资者", "canonical": "普通投资者", "type": "CONCEPT"},
+    {"surface": "专业投资者", "canonical": "专业投资者", "type": "CONCEPT"},
+    {"surface": "风险承受能力等级", "canonical": "风险承受能力等级", "type": "FINANCIAL_INDICATOR"},
+    {"surface": "产品或服务风险等级", "canonical": "产品或服务风险等级", "type": "FINANCIAL_INDICATOR"},
+    {"surface": "《投资者基本信息表》", "canonical": "投资者基本信息表", "type": "PRODUCT"},
+    {"surface": "《投资者风险承受能力评估问卷》", "canonical": "投资者风险承受能力评估问卷", "type": "PRODUCT"},
+    {"surface": "《产品或服务风险等级名录》", "canonical": "产品或服务风险等级名录", "type": "PRODUCT"},
+    {"surface": "金融产品", "canonical": "金融产品", "type": "FINANCIAL_INSTRUMENT"},
+    {"surface": "2017年6月28日", "canonical": "2017年6月28日", "type": "DATE"},
+    {"surface": "2017年7月1日", "canonical": "2017年7月1日", "type": "DATE"}
+  ],
+  "relations": [
+    {"subject": "中国证券业协会", "predicate": "发布", "object": "证券经营机构投资者适当性管理实施指引（试行）", "object_type": "REGULATION", "evidence": "经协会第六届常务理事会第1次会议表决通过，并向中国证监会备案，现予发布"},
+    {"subject": "中国证券业协会", "predicate": "解释", "object": "证券经营机构投资者适当性管理实施指引（试行）", "object_type": "REGULATION", "evidence": "本指引由中国证券业协会负责解释"},
+    {"subject": "中国证券业协会", "predicate": "自律管理", "object": "证券经营机构", "object_type": "ORGANIZATION", "evidence": "协会对证券经营机构履行适当性义务进行自律管理"},
+    {"subject": "证券经营机构投资者适当性管理实施指引（试行）", "predicate": "依据", "object": "证券期货投资者适当性管理办法", "object_type": "REGULATION", "evidence": "根据《证券法》、《证券公司监督管理条例》、《证券期货投资者适当性管理办法》……制定本指引"},
+    {"subject": "证券经营机构投资者适当性管理实施指引（试行）", "predicate": "依据", "object": "证券法", "object_type": "REGULATION", "evidence": "根据《证券法》、《证券公司监督管理条例》"},
+    {"subject": "中国证监会", "predicate": "备案", "object": "证券经营机构投资者适当性管理实施指引（试行）", "object_type": "REGULATION", "evidence": "并向中国证监会备案"},
+    {"subject": "证券经营机构", "predicate": "销售", "object": "金融产品", "object_type": "FINANCIAL_INSTRUMENT", "evidence": "证券经营机构向投资者销售金融产品"},
+    {"subject": "证券经营机构", "predicate": "评估", "object": "风险承受能力等级", "object_type": "FINANCIAL_INDICATOR", "evidence": "通过投资者填写《投资者风险承受能力评估问卷》等方法对其风险承受能力进行综合评估", "prop_kind": "DEPENDENCY", "strength": "HIGH"},
+    {"subject": "普通投资者", "predicate": "可转化为", "object": "专业投资者", "object_type": "CONCEPT", "evidence": "普通投资者申请转化成为专业投资者的"},
+    {"subject": "专业投资者", "predicate": "可购买", "object": "金融产品", "object_type": "FINANCIAL_INSTRUMENT", "evidence": "专业投资者可以购买或接受所有风险等级的产品或服务"}
+  ],
+  "attributes": [
+    {"entity": "证券经营机构投资者适当性管理实施指引（试行）", "name": "实施日期", "value": "2017年7月1日", "value_type": "DATE", "evidence": "本指引自2017年7月1日起实施", "required": false},
+    {"entity": "证券经营机构投资者适当性管理实施指引（试行）", "name": "发布日期", "value": "2017年6月28日", "value_type": "DATE", "evidence": "2017年6月28日发布", "required": false},
+    {"entity": "普通投资者", "name": "风险承受能力等级划分", "value": "五级", "value_type": "ENUM", "evidence": "其风险承受能力等级由低到高至少划分为五级", "required": true},
+    {"entity": "产品或服务风险等级", "name": "等级划分", "value": "五级", "value_type": "ENUM", "evidence": "产品或服务风险等级由低至高至少划分为五级", "required": true}
+  ],
+  "rules": [
+    {"subject": "证券经营机构", "condition": "向投资者销售金融产品", "action": "应当履行适当性义务，进行风险评估与分类匹配", "modality": "OBLIGATION", "evidence": "证券经营机构向投资者销售金融产品时，应当履行适当性义务", "rule_type": "VALIDATION", "output_type": "STRING", "reused_by": ["适当性管理流程"], "certainty": "GENERAL"},
+    {"subject": "证券经营机构", "condition": "", "action": "不得向投资者销售其风险承受能力等级不匹配的产品或服务", "modality": "PROHIBITION", "evidence": "不得向风险承受能力等级不匹配的投资者销售产品", "rule_type": "TRIGGER", "output_type": "", "reused_by": [], "certainty": "GENERAL"},
+    {"subject": "普通投资者", "condition": "申请转化成为专业投资者", "action": "可以按照相关规定申请转化成为专业投资者", "modality": "PERMISSION", "evidence": "普通投资者申请转化成为专业投资者的", "rule_type": "DERIVATION", "output_type": "RANK", "reused_by": [], "certainty": "GENERAL"},
+    {"subject": "", "condition": "产品风险等级由低至高", "action": "至少划分为五级", "modality": "CONDITIONAL", "evidence": "产品或服务风险等级由低至高至少划分为五级", "rule_type": "VALIDATION", "output_type": "", "reused_by": [], "certainty": "ENTERPRISE"}
+  ],
+  "processes": [
+    {
+      "name": "投资者适当性管理流程",
+      "description": "从了解客户到回访的完整适当性管理流程",
+      "steps": [
+        {"label": "流程开始", "kind": "START", "actor": "", "evidence": "", "sub_process_ref": ""},
+        {"label": "填写《投资者基本信息表》和《投资者风险承受能力评估问卷》", "kind": "TASK", "actor": "投资者", "evidence": "投资者填写《投资者基本信息表》和《投资者风险承受能力评估问卷》", "sub_process_ref": ""},
+        {"label": "对投资者的风险承受能力进行综合评估", "kind": "TASK", "actor": "证券经营机构", "evidence": "对投资者的风险承受能力进行综合评估", "sub_process_ref": ""},
+        {"label": "确定其风险承受能力等级", "kind": "GATEWAY", "actor": "证券经营机构", "evidence": "确定其风险承受能力等级", "sub_process_ref": ""},
+        {"label": "匹配与其风险承受能力等级相适应的产品或服务", "kind": "GATEWAY", "actor": "证券经营机构", "evidence": "匹配与其风险承受能力等级相适应的产品或服务", "sub_process_ref": ""},
+        {"label": "进行风险揭示并签署相关文件", "kind": "TASK", "actor": "证券经营机构", "evidence": "进行风险揭示，并签署相关文件", "sub_process_ref": ""},
+        {"label": "持续开展投资者回访", "kind": "TASK", "actor": "证券经营机构", "evidence": "持续开展投资者回访", "sub_process_ref": ""},
+        {"label": "流程结束", "kind": "END", "actor": "", "evidence": ""}
+      ],
+      "flows": [
+        {"from": 1, "to": 2, "type": "SEQUENCE", "condition": "", "evidence": "首先填写问卷，然后综合评估"},
+        {"from": 2, "to": 3, "type": "SEQUENCE", "condition": "", "evidence": ""},
+        {"from": 3, "to": 4, "type": "CONDITIONAL", "condition": "评估完成后", "evidence": "评估完成后，匹配适当产品"},
+        {"from": 4, "to": 5, "type": "SEQUENCE", "condition": "", "evidence": ""},
+        {"from": 5, "to": 7, "type": "SEQUENCE", "condition": "", "evidence": ""}
+      ],
+      "preconditions": ["投资者已开立证券账户"],
+      "postconditions": ["适当性匹配结果已留档并告知投资者"]
+    }
+  ],
+  "states": [
+    {
+      "object": "普通投资者",
+      "name": "风险承受能力等级状态机",
+      "states": [
+        {"label": "C1（含风险承受能力最低类别）", "initial": true, "evidence": "C1（含风险承受能力最低类别的投资者）、C2、C3、C4、C5"},
+        {"label": "C2", "initial": false, "evidence": "C2"},
+        {"label": "C3", "initial": false, "evidence": "C3"},
+        {"label": "C4", "initial": false, "evidence": "C4"},
+        {"label": "C5", "initial": false, "evidence": "C5"}
+      ],
+      "transitions": [
+        {"from": 0, "to": 1, "event": "持续评估", "condition": "评估结果变化", "action": "调整等级", "evidence": "根据更新的信息持续评估投资者风险承受能力"},
+        {"from": 1, "to": 2, "event": "持续评估", "condition": "", "action": "", "evidence": "持续评估投资者风险承受能力"}
+      ]
+    },
+    {
+      "object": "投资者",
+      "name": "投资者类别转化状态机",
+      "states": [
+        {"label": "普通投资者", "initial": true, "evidence": "普通投资者"},
+        {"label": "专业投资者", "initial": false, "evidence": "专业投资者"}
+      ],
+      "transitions": [
+        {"from": 0, "to": 1, "event": "申请转化", "condition": "符合《办法》第十二条规定经审慎评估", "action": "书面告知审查结果和理由", "evidence": "普通投资者申请转化成为专业投资者的"}
+      ]
+    }
+  ],
+  "functions": [
+    {"name": "适当性匹配函数", "subject": "证券经营机构", "formula": "投资者风险承受能力等级 ≥ 产品或服务风险等级，且不高于其承受能力上限", "inputs": ["投资者风险承受能力等级", "产品或服务风险等级"], "output_type": "BOOLEAN", "evidence": "根据投资者的风险承受能力等级与产品或服务的风险等级相匹配的原则"},
+    {"name": "回访率函数", "subject": "证券经营机构", "formula": "每年回访投资者数 ÷ 上一年度末购买产品或接受服务的投资者总数 ≥ 10%", "inputs": ["回访投资者数", "上一年度末投资者总数"], "output_type": "PERCENT", "evidence": "每年抽取不低于上一年度末购买产品或接受服务的投资者总数……的10%进行回访"}
+  ],
+  "temporal": [
+    {"subject": "本指引", "kind": "VALIDITY", "value": "自2017年7月1日起实施", "evidence": "自2017年7月1日起实施"},
+    {"subject": "投资者回访", "kind": "FREQUENCY", "value": "每年", "evidence": "每年抽取不低于上一年度末购买产品或接受服务的投资者总数"}
+  ],
+  "actions": [
+    {"name": "书面风险警示", "actor": "证券经营机构", "level": "WARN", "target": "投资者", "side_effect": "投资者仍坚持购买可销售", "trigger": "投资者主动要求购买风险等级高于其承受能力的产品", "evidence": "应当就产品或者服务风险高于其承受能力进行特别的书面风险警示", "precondition": "已识别触发情形", "postcondition": "处置动作已记录"},
+    {"name": "自律惩戒措施", "actor": "中国证券业协会", "level": "INTERVENE", "target": "证券经营机构及人员", "side_effect": "依法采取自律惩戒措施", "trigger": "违反适当性管理规定", "evidence": "对违反适当性管理规定的证券经营机构及人员依法采取自律惩戒措施", "precondition": "已识别触发情形", "postcondition": "处置动作已记录"}
+  ],
+  "constraints": [
+    {"subject": "普通投资者风险承受能力等级", "type": "ENUM", "description": "由低到高至少划分为五级：C1、C2、C3、C4、C5", "evidence": "按其风险承受能力等级由低到高至少划分为五级"},
+    {"subject": "投资者回访比例", "type": "VALUE_RANGE", "description": "每年抽取不低于上一年度末投资者总数的10%进行回访", "evidence": "每年抽取不低于上一年度末购买产品或接受服务的投资者总数……的10%进行回访"}
+  ],
+  "permissions": [
+    {"actor": "普通投资者", "action": "申请转化成为专业投资者", "effect": "PERMIT", "scope": "符合《办法》第八条第（一）（二）（三）项或第十二条规定", "evidence": "普通投资者申请转化成为专业投资者的", "role": "适当性管理岗", "actor_type": "HUMAN"},
+    {"actor": "专业投资者", "action": "购买或接受所有风险等级的产品或服务", "effect": "PERMIT", "scope": "法律、行政法规、中国证监会规定及市场准入有要求的从其规定", "evidence": "专业投资者可以购买或接受所有风险等级的产品或服务", "role": "适当性管理岗", "actor_type": "HUMAN"}
+  ],
+  "document_meta": {
+    "domain": "金融/投资者适当性",
+    "version": "试行版",
+    "doc_type": "行业自律指引"
+  }
+}
