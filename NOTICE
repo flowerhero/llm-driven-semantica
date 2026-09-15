@@ -1,0 +1,37 @@
+semantica 简易版 (semantica-simple)
+Copyright 2026 The semantica-simple contributors
+
+本产品采用 Apache License 2.0 发布（见 LICENSE）。
+
+---------------- 第三方出处声明 (attribution) ----------------
+
+本项目的设计参考了上游开源项目 semantica（知识图谱 / Context Graph 流水线）：
+
+  - 上游项目：semantica
+  - 上游许可证：MIT License
+  - 上游版权：Copyright (c) 2026 sharptoolbox
+
+本简易版在读懂上游 8 步流水线（Ingest → Parse → Normalize → Extract →
+Build KG → QA → Store → Deliver）的基础上做了精简与 Skill-First 重构，
+部分抽取/解析规则提炼自上游源码。依据上游 MIT 许可证第 1 条，此处保留
+其版权声明与许可声明。
+
+上游 MIT 原文（节选）：
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.

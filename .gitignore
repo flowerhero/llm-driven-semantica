@@ -1,0 +1,42 @@
+# ===== 临时运行产物（含用户文档内容，禁止入库）=====
+runs/
+outputs/
+
+# ===== 外部/参考目录（非本项目核心，单独归档）=====
+others/
+ontology-driven-dev-main/
+
+# ===== 工作区元数据 =====
+.workbuddy/
+.venv/
+venv/
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+dist/
+build/
+*.egg
+
+# ===== 环境与密钥 =====
+.env
+.env.*
+!.env.example
+
+# ===== 编辑器/OS =====
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# 非核心：留空待用的 agent 定义目录
+agents/
+
+# ===== 发布排除：内部文档 / 私有素材 / 二进制 =====
+docs/memory/
+smini-extract.backup-*/
+tests/fixtures/新核心系统（理赔系统）需求规格说明书V2.1_签收版.md
+tests/fixtures/证券公司关键岗位能力素质模型系列（投资顾问类）.pdf
