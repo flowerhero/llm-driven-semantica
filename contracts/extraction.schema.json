@@ -4,43 +4,131 @@
   "title": "Step 4 Extract 输出 · ExtractionResult（契约即规则）",
   "description": "★ 零规则架构：LLM 全权负责语义（按约定格式交卷），ID/span/literal/去重等确定性锚点惰性化到消费层。宿主交卷五件套：entities + relations + attributes + rules（业务规则 v3）+ processes（业务流程 v4）。mention_id / relation_id / triplet_id / rule_id / process_id / step_id / flow_id 由 Python 用 sha256 内容寻址补算——原版用 hash() 带随机盐导致跨进程 ID 漂移、图谱无限膨胀。char_start=-1 表示尽力定位失败（未定位），允许；object_literal 由 object_type 派生（DATE/MONEY/PERCENT/QUANTITY → true）；value_type 是属性值类型（独立枚举），仅属性三元组非空；modality 是规则模态（独立枚举），仅规则非空；kind 是流程步骤类型（独立枚举，TASK/GATEWAY/EVENT），flow.type 是控制流类型（独立枚举，SEQUENCE/PARALLEL/CONDITIONAL/LOOP），flows 的 from/to 是整数下标引用 steps。规则与流程均不进入实体-边图谱，作为独立产出保留（build_kg 在 metadata 登记 rule_count / process_count）。",
   "type": "object",
-  "required": ["doc_id", "mentions", "relations", "triplets"],
+  "required": [
+    "doc_id",
+    "mentions",
+    "relations",
+    "triplets"
+  ],
   "additionalProperties": false,
   "properties": {
-    "doc_id": { "type": "string" },
+    "doc_id": {
+      "type": "string"
+    },
     "processes": {
       "type": "array",
       "description": "业务流程（v4 新增）：有序活动 + 控制流。本体论依据：流程是 DOLCE 的 perdurant（持续体，在时间中延展），区别于实体（endurant）与属性（DatatypeProperty）。process_id 由 name 内容寻址；step_id 由 (process, index, label) 内容寻址；flow_id 由 (process, from, to, type, condition) 内容寻址——Python 补算。flows 的 from/to 是 steps 数组整数下标，越界丢弃。流程不进入实体-边图谱，作为独立产出保留（build_kg 在 metadata 登记 process_count）。",
       "items": {
         "type": "object",
-        "required": ["process_id", "doc_id", "name", "steps"],
+        "required": [
+          "process_id",
+          "doc_id",
+          "name",
+          "steps"
+        ],
         "additionalProperties": false,
         "properties": {
-          "process_id": { "type": "string", "description": "Python 补算：stable_id(\"process\", name)" },
-          "doc_id": { "type": "string" },
-          "name": { "type": "string", "description": "流程名（LLM 给，内容寻址）" },
-          "description": { "type": "string", "description": "流程说明（可空）" },
+          "process_id": {
+            "type": "string",
+            "description": "Python 补算：stable_id(\"process\", name)"
+          },
+          "doc_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "流程名（LLM 给，内容寻址）"
+          },
+          "description": {
+            "type": "string",
+            "description": "流程说明（可空）"
+          },
           "steps": {
             "type": "array",
             "description": "按执行顺序的步骤列表；index 即数组下标",
             "items": {
               "type": "object",
-              "required": ["step_id", "process_id", "index", "label", "kind"],
+              "required": [
+                "step_id",
+                "process_id",
+                "index",
+                "label",
+                "kind"
+              ],
               "additionalProperties": false,
               "properties": {
-                "step_id": { "type": "string", "description": "Python 补算：stable_id(\"step\", process_id, index, label)" },
-                "process_id": { "type": "string" },
-                "index": { "type": "integer", "minimum": 0, "description": "steps 数组下标（0-based），flows 用其引用" },
-                "label": { "type": "string", "description": "步骤内容（做什么）" },
-                "kind": { "enum": ["TASK", "GATEWAY", "EVENT", "START", "END", "SYSTEM_TASK"], "description": "步骤类型独立 3 类枚举：TASK 活动/GATEWAY 决策点/EVENT 事件；判不出用 TASK" },
-                "actor": { "type": "string", "description": "执行者（用实体的 canonical），可空" },
-                "evidence_span": { "type": ["array", "null"], "description": "evidence 在原文中的 [start, end]，尽力定位，找不到为 null", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
-                "evidence_text": { "type": ["string", "null"], "description": "LLM 提供的原文短引用（溯源用）" },
-                "extractor": { "type": "string", "default": "llm.proc.v1" },
-                "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 1.0 },
-                "provenance": { "type": ["object", "null"] },
-                "metadata": { "type": "object" },
-                "sub_process_ref": { "type": "string" }
+                "step_id": {
+                  "type": "string",
+                  "description": "Python 补算：stable_id(\"step\", process_id, index, label)"
+                },
+                "process_id": {
+                  "type": "string"
+                },
+                "index": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "steps 数组下标（0-based），flows 用其引用"
+                },
+                "label": {
+                  "type": "string",
+                  "description": "步骤内容（做什么）"
+                },
+                "kind": {
+                  "enum": [
+                    "TASK",
+                    "GATEWAY",
+                    "EVENT",
+                    "START",
+                    "END",
+                    "SYSTEM_TASK"
+                  ],
+                  "description": "步骤类型独立 3 类枚举：TASK 活动/GATEWAY 决策点/EVENT 事件；判不出用 TASK"
+                },
+                "actor": {
+                  "type": "string",
+                  "description": "执行者（用实体的 canonical），可空"
+                },
+                "evidence_span": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "description": "evidence 在原文中的 [start, end]，尽力定位，找不到为 null",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "evidence_text": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "LLM 提供的原文短引用（溯源用）"
+                },
+                "extractor": {
+                  "type": "string",
+                  "default": "llm.proc.v1"
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0.0,
+                  "maximum": 1.0,
+                  "default": 1.0
+                },
+                "provenance": {
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "metadata": {
+                  "type": "object"
+                },
+                "sub_process_ref": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -49,30 +137,117 @@
             "description": "控制流：from/to 引用 steps 数组下标，越界由薄壳丢弃",
             "items": {
               "type": "object",
-              "required": ["flow_id", "process_id", "from_index", "to_index", "type"],
+              "required": [
+                "flow_id",
+                "process_id",
+                "from_index",
+                "to_index",
+                "type"
+              ],
               "additionalProperties": false,
               "properties": {
-                "flow_id": { "type": "string", "description": "Python 补算：stable_id(\"flow\", process_id, from, to, type, condition)" },
-                "process_id": { "type": "string" },
-                "from_index": { "type": "integer", "minimum": 0, "description": "来源步骤下标" },
-                "to_index": { "type": "integer", "minimum": 0, "description": "目标步骤下标" },
-                "type": { "enum": ["SEQUENCE", "PARALLEL", "CONDITIONAL", "LOOP"], "description": "控制流类型独立 4 类枚举：SEQUENCE 顺序/PARALLEL 并行(AND)/CONDITIONAL 排他分支(XOR)/LOOP 循环；判不出用 SEQUENCE" },
-                "condition": { "type": "string", "description": "仅 CONDITIONAL 分支携带的分支条件（可空）" },
-                "evidence_span": { "type": ["array", "null"], "description": "evidence 在原文中的 [start, end]，尽力定位，找不到为 null", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
-                "evidence_text": { "type": ["string", "null"], "description": "LLM 提供的原文短引用（溯源用）" },
-                "extractor": { "type": "string", "default": "llm.proc.v1" },
-                "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 1.0 },
-                "provenance": { "type": ["object", "null"] },
-                "metadata": { "type": "object" }
+                "flow_id": {
+                  "type": "string",
+                  "description": "Python 补算：stable_id(\"flow\", process_id, from, to, type, condition)"
+                },
+                "process_id": {
+                  "type": "string"
+                },
+                "from_index": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "来源步骤下标"
+                },
+                "to_index": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "目标步骤下标"
+                },
+                "type": {
+                  "enum": [
+                    "SEQUENCE",
+                    "PARALLEL",
+                    "CONDITIONAL",
+                    "LOOP"
+                  ],
+                  "description": "控制流类型独立 4 类枚举：SEQUENCE 顺序/PARALLEL 并行(AND)/CONDITIONAL 排他分支(XOR)/LOOP 循环；判不出用 SEQUENCE"
+                },
+                "condition": {
+                  "type": "string",
+                  "description": "仅 CONDITIONAL 分支携带的分支条件（可空）"
+                },
+                "evidence_span": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "description": "evidence 在原文中的 [start, end]，尽力定位，找不到为 null",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "evidence_text": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "LLM 提供的原文短引用（溯源用）"
+                },
+                "extractor": {
+                  "type": "string",
+                  "default": "llm.proc.v1"
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0.0,
+                  "maximum": 1.0,
+                  "default": 1.0
+                },
+                "provenance": {
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "metadata": {
+                  "type": "object"
+                }
               }
             }
           },
-          "extractor": { "type": "string", "default": "llm.proc.v1" },
-          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 1.0 },
-          "provenance": { "type": ["object", "null"] },
-          "metadata": { "type": "object" },
-          "preconditions": { "type": "array", "items": { "type": "string" } },
-          "postconditions": { "type": "array", "items": { "type": "string" } }
+          "extractor": {
+            "type": "string",
+            "default": "llm.proc.v1"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "default": 1.0
+          },
+          "provenance": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "preconditions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "postconditions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       }
     },
@@ -81,32 +256,99 @@
       "description": "状态机（v6 新增）：对象生命周期状态迁移，预测引擎的骨架。sm_id 由 (object, name) 内容寻址；state_id 由 (sm_id, 下标, label) 内容寻址；transition_id 由 (sm_id, from, to, event, condition) 内容寻址——Python 补算。transitions 的 from/to 是 states 数组整数下标，越界丢弃。状态机不进入实体-边图谱（build_kg 在 metadata 登记 state_count）。",
       "items": {
         "type": "object",
-        "required": ["sm_id", "doc_id", "object", "name", "states"],
+        "required": [
+          "sm_id",
+          "doc_id",
+          "object",
+          "name",
+          "states"
+        ],
         "additionalProperties": false,
         "properties": {
-          "sm_id": { "type": "string", "description": "Python 补算：stable_id(\"sm\", object, name)" },
-          "doc_id": { "type": "string" },
-          "object": { "type": "string", "description": "状态机归属对象（用实体 canonical）" },
-          "name": { "type": "string", "description": "状态机名（LLM 给，内容寻址）" },
+          "sm_id": {
+            "type": "string",
+            "description": "Python 补算：stable_id(\"sm\", object, name)"
+          },
+          "doc_id": {
+            "type": "string"
+          },
+          "object": {
+            "type": "string",
+            "description": "状态机归属对象（用实体 canonical）"
+          },
+          "name": {
+            "type": "string",
+            "description": "状态机名（LLM 给，内容寻址）"
+          },
           "states": {
             "type": "array",
             "description": "状态列表；index 即数组下标",
             "items": {
               "type": "object",
-              "required": ["state_id", "sm_id", "index", "label"],
+              "required": [
+                "state_id",
+                "sm_id",
+                "index",
+                "label"
+              ],
               "additionalProperties": false,
               "properties": {
-                "state_id": { "type": "string", "description": "Python 补算：stable_id(\"state\", sm_id, index, label)" },
-                "sm_id": { "type": "string" },
-                "index": { "type": "integer", "minimum": 0 },
-                "label": { "type": "string", "description": "状态名（做什么/处于什么）" },
-                "initial": { "type": "boolean", "default": false, "description": "是否初始状态（可空）" },
-                "evidence_span": { "type": ["array", "null"], "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
-                "evidence_text": { "type": ["string", "null"] },
-                "extractor": { "type": "string", "default": "llm.sm.v1" },
-                "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 1.0 },
-                "provenance": { "type": ["object", "null"] },
-                "metadata": { "type": "object" }
+                "state_id": {
+                  "type": "string",
+                  "description": "Python 补算：stable_id(\"state\", sm_id, index, label)"
+                },
+                "sm_id": {
+                  "type": "string"
+                },
+                "index": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "label": {
+                  "type": "string",
+                  "description": "状态名（做什么/处于什么）"
+                },
+                "initial": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "是否初始状态（可空）"
+                },
+                "evidence_span": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "integer"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "evidence_text": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "extractor": {
+                  "type": "string",
+                  "default": "llm.sm.v1"
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0.0,
+                  "maximum": 1.0,
+                  "default": 1.0
+                },
+                "provenance": {
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "metadata": {
+                  "type": "object"
+                }
               }
             }
           },
@@ -115,29 +357,99 @@
             "description": "状态迁移：from/to 引用 states 数组下标，越界由薄壳丢弃",
             "items": {
               "type": "object",
-              "required": ["transition_id", "sm_id", "from_index", "to_index"],
+              "required": [
+                "transition_id",
+                "sm_id",
+                "from_index",
+                "to_index"
+              ],
               "additionalProperties": false,
               "properties": {
-                "transition_id": { "type": "string", "description": "Python 补算：stable_id(\"trans\", sm_id, from, to, event, condition)" },
-                "sm_id": { "type": "string" },
-                "from_index": { "type": "integer", "minimum": 0 },
-                "to_index": { "type": "integer", "minimum": 0 },
-                "event": { "type": "string", "description": "触发事件（可空）" },
-                "condition": { "type": "string", "description": "守卫条件（可空）" },
-                "action": { "type": "string", "description": "迁移动作（可空）" },
-                "evidence_span": { "type": ["array", "null"], "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
-                "evidence_text": { "type": ["string", "null"] },
-                "extractor": { "type": "string", "default": "llm.sm.v1" },
-                "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 1.0 },
-                "provenance": { "type": ["object", "null"] },
-                "metadata": { "type": "object" }
+                "transition_id": {
+                  "type": "string",
+                  "description": "Python 补算：stable_id(\"trans\", sm_id, from, to, event, condition)"
+                },
+                "sm_id": {
+                  "type": "string"
+                },
+                "from_index": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "to_index": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "event": {
+                  "type": "string",
+                  "description": "触发事件（可空）"
+                },
+                "condition": {
+                  "type": "string",
+                  "description": "守卫条件（可空）"
+                },
+                "action": {
+                  "type": "string",
+                  "description": "迁移动作（可空）"
+                },
+                "evidence_span": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "integer"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "evidence_text": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "extractor": {
+                  "type": "string",
+                  "default": "llm.sm.v1"
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0.0,
+                  "maximum": 1.0,
+                  "default": 1.0
+                },
+                "provenance": {
+                  "type": [
+                    "object",
+                    "null"
+                  ]
+                },
+                "metadata": {
+                  "type": "object"
+                }
               }
             }
           },
-          "extractor": { "type": "string", "default": "llm.sm.v1" },
-          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 1.0 },
-          "provenance": { "type": ["object", "null"] },
-          "metadata": { "type": "object" }
+          "extractor": {
+            "type": "string",
+            "default": "llm.sm.v1"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "default": 1.0
+          },
+          "provenance": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          }
         }
       }
     },
@@ -146,22 +458,88 @@
       "description": "函数指标（v6 新增）：把业务经验写成可计算定义，是推演的输入。function_id 由 (name, subject, formula) 内容寻址——Python 补算。不进入实体-边图谱（build_kg 在 metadata 登记 function_count）。",
       "items": {
         "type": "object",
-        "required": ["function_id", "doc_id", "name", "formula"],
+        "required": [
+          "function_id",
+          "doc_id",
+          "name",
+          "formula"
+        ],
         "additionalProperties": false,
         "properties": {
-          "function_id": { "type": "string", "description": "Python 补算：stable_id(\"func\", name, subject, formula)" },
-          "doc_id": { "type": "string" },
-          "name": { "type": "string", "description": "指标名" },
-          "subject": { "type": "string", "description": "作用主体（用实体 canonical），可空" },
-          "formula": { "type": "string", "description": "计算定义（自然语言/运算符描述，不必可执行）" },
-          "inputs": { "type": "array", "items": { "type": "string" }, "description": "依赖因子（实体 canonical 或字面量名），可空" },
-          "output_type": { "enum": ["NUMBER", "PERCENT", "RANK", "BOOLEAN", "ENUM", "STRING", "OTHER"], "description": "输出类型独立 7 类枚举；判不出用 OTHER" },
-          "evidence_span": { "type": ["array", "null"], "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
-          "evidence_text": { "type": ["string", "null"] },
-          "extractor": { "type": "string", "default": "llm.fn.v1" },
-          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 1.0 },
-          "provenance": { "type": ["object", "null"] },
-          "metadata": { "type": "object" }
+          "function_id": {
+            "type": "string",
+            "description": "Python 补算：stable_id(\"func\", name, subject, formula)"
+          },
+          "doc_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "指标名"
+          },
+          "subject": {
+            "type": "string",
+            "description": "作用主体（用实体 canonical），可空"
+          },
+          "formula": {
+            "type": "string",
+            "description": "计算定义（自然语言/运算符描述，不必可执行）"
+          },
+          "inputs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "依赖因子（实体 canonical 或字面量名），可空"
+          },
+          "output_type": {
+            "enum": [
+              "NUMBER",
+              "PERCENT",
+              "RANK",
+              "BOOLEAN",
+              "ENUM",
+              "STRING",
+              "OTHER"
+            ],
+            "description": "输出类型独立 7 类枚举；判不出用 OTHER"
+          },
+          "evidence_span": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "evidence_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "extractor": {
+            "type": "string",
+            "default": "llm.fn.v1"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "default": 1.0
+          },
+          "provenance": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          }
         }
       }
     },
@@ -170,21 +548,79 @@
       "description": "时序时态（v6 新增）：把时间限定绑定到某事实/规则/流程/状态。temporal_id 由 (subject, kind, value) 内容寻址——Python 补算。不进入实体-边图谱（build_kg 在 metadata 登记 temporal_count）。",
       "items": {
         "type": "object",
-        "required": ["temporal_id", "doc_id", "subject", "kind", "value"],
+        "required": [
+          "temporal_id",
+          "doc_id",
+          "subject",
+          "kind",
+          "value"
+        ],
         "additionalProperties": false,
         "properties": {
-          "temporal_id": { "type": "string", "description": "Python 补算：stable_id(\"temporal\", subject, kind, value)" },
-          "doc_id": { "type": "string" },
-          "subject": { "type": "string", "description": "主体：事实/规则/流程名或实体 canonical" },
-          "kind": { "enum": ["VALIDITY", "FREQUENCY", "WINDOW", "TRIGGER"], "description": "时态类型独立 4 类枚举：生效/有效期→VALIDITY，频率/周期→FREQUENCY，时间窗/预测窗口→WINDOW，触发时点→TRIGGER；判不出用 VALIDITY" },
-          "value": { "type": "string", "description": "时间描述（逐字取自原文）" },
-          "anchor": { "type": "string", "description": "时间锚点（可空）" },
-          "evidence_span": { "type": ["array", "null"], "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
-          "evidence_text": { "type": ["string", "null"] },
-          "extractor": { "type": "string", "default": "llm.tp.v1" },
-          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 1.0 },
-          "provenance": { "type": ["object", "null"] },
-          "metadata": { "type": "object" }
+          "temporal_id": {
+            "type": "string",
+            "description": "Python 补算：stable_id(\"temporal\", subject, kind, value)"
+          },
+          "doc_id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string",
+            "description": "主体：事实/规则/流程名或实体 canonical"
+          },
+          "kind": {
+            "enum": [
+              "VALIDITY",
+              "FREQUENCY",
+              "WINDOW",
+              "TRIGGER"
+            ],
+            "description": "时态类型独立 4 类枚举：生效/有效期→VALIDITY，频率/周期→FREQUENCY，时间窗/预测窗口→WINDOW，触发时点→TRIGGER；判不出用 VALIDITY"
+          },
+          "value": {
+            "type": "string",
+            "description": "时间描述（逐字取自原文）"
+          },
+          "anchor": {
+            "type": "string",
+            "description": "时间锚点（可空）"
+          },
+          "evidence_span": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "evidence_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "extractor": {
+            "type": "string",
+            "default": "llm.tp.v1"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "default": 1.0
+          },
+          "provenance": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          }
         }
       }
     },
@@ -193,25 +629,91 @@
       "description": "动作处置（v6 新增）：处置动作元信息，供决策执行。action_id 由 (name, actor, level, trigger) 内容寻址——Python 补算。不进入实体-边图谱（build_kg 在 metadata 登记 action_count）。",
       "items": {
         "type": "object",
-        "required": ["action_id", "doc_id", "name", "level"],
+        "required": [
+          "action_id",
+          "doc_id",
+          "name",
+          "level"
+        ],
         "additionalProperties": false,
         "properties": {
-          "action_id": { "type": "string", "description": "Python 补算：stable_id(\"action\", name, actor, level, trigger)" },
-          "doc_id": { "type": "string" },
-          "name": { "type": "string", "description": "动作名" },
-          "actor": { "type": "string", "description": "执行者（用实体 canonical），可空" },
-          "level": { "enum": ["OBSERVE", "WARN", "INTERVENE"], "description": "处置级别独立 3 类枚举：观察/记录→OBSERVE，警示/提示→WARN，干预/处置→INTERVENE；判不出用 OBSERVE" },
-          "target": { "type": "string", "description": "作用对象（可空）" },
-          "side_effect": { "type": "string", "description": "副作用/代价（可空）" },
-          "trigger": { "type": "string", "description": "触发情形（可空）" },
-          "evidence_span": { "type": ["array", "null"], "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
-          "evidence_text": { "type": ["string", "null"] },
-          "extractor": { "type": "string", "default": "llm.ac.v1" },
-          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 1.0 },
-          "provenance": { "type": ["object", "null"] },
-          "metadata": { "type": "object" },
-          "precondition": { "type": "string" },
-          "postcondition": { "type": "string" }
+          "action_id": {
+            "type": "string",
+            "description": "Python 补算：stable_id(\"action\", name, actor, level, trigger)"
+          },
+          "doc_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "动作名"
+          },
+          "actor": {
+            "type": "string",
+            "description": "执行者（用实体 canonical），可空"
+          },
+          "level": {
+            "enum": [
+              "OBSERVE",
+              "WARN",
+              "INTERVENE"
+            ],
+            "description": "处置级别独立 3 类枚举：观察/记录→OBSERVE，警示/提示→WARN，干预/处置→INTERVENE；判不出用 OBSERVE"
+          },
+          "target": {
+            "type": "string",
+            "description": "作用对象（可空）"
+          },
+          "side_effect": {
+            "type": "string",
+            "description": "副作用/代价（可空）"
+          },
+          "trigger": {
+            "type": "string",
+            "description": "触发情形（可空）"
+          },
+          "evidence_span": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "evidence_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "extractor": {
+            "type": "string",
+            "default": "llm.ac.v1"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "default": 1.0
+          },
+          "provenance": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "precondition": {
+            "type": "string"
+          },
+          "postcondition": {
+            "type": "string"
+          }
         }
       }
     },
@@ -220,20 +722,77 @@
       "description": "结构约束（v6 新增）：结构合法性约束（SHACL 式），保证预测与决策不基于非法状态。constraint_id 由 (subject, type, description) 内容寻址——Python 补算。不进入实体-边图谱（build_kg 在 metadata 登记 constraint_count）。",
       "items": {
         "type": "object",
-        "required": ["constraint_id", "doc_id", "subject", "type", "description"],
+        "required": [
+          "constraint_id",
+          "doc_id",
+          "subject",
+          "type",
+          "description"
+        ],
         "additionalProperties": false,
         "properties": {
-          "constraint_id": { "type": "string", "description": "Python 补算：stable_id(\"constraint\", subject, type, description)" },
-          "doc_id": { "type": "string" },
-          "subject": { "type": "string", "description": "约束对象（用实体 canonical）" },
-          "type": { "enum": ["CARDINALITY", "VALUE_RANGE", "ENUM", "DISJOINT", "REQUIRED", "CONSISTENCY"], "description": "约束类型独立 6 类枚举：基数→CARDINALITY，值域/区间→VALUE_RANGE，枚举取值→ENUM，类不相交→DISJOINT，必填/必备→REQUIRED，一致性→CONSISTENCY；判不出用 CONSISTENCY" },
-          "description": { "type": "string", "description": "约束内容（可含原文）" },
-          "evidence_span": { "type": ["array", "null"], "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
-          "evidence_text": { "type": ["string", "null"] },
-          "extractor": { "type": "string", "default": "llm.cn.v1" },
-          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 1.0 },
-          "provenance": { "type": ["object", "null"] },
-          "metadata": { "type": "object" }
+          "constraint_id": {
+            "type": "string",
+            "description": "Python 补算：stable_id(\"constraint\", subject, type, description)"
+          },
+          "doc_id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string",
+            "description": "约束对象（用实体 canonical）"
+          },
+          "type": {
+            "enum": [
+              "CARDINALITY",
+              "VALUE_RANGE",
+              "ENUM",
+              "DISJOINT",
+              "REQUIRED",
+              "CONSISTENCY"
+            ],
+            "description": "约束类型独立 6 类枚举：基数→CARDINALITY，值域/区间→VALUE_RANGE，枚举取值→ENUM，类不相交→DISJOINT，必填/必备→REQUIRED，一致性→CONSISTENCY；判不出用 CONSISTENCY"
+          },
+          "description": {
+            "type": "string",
+            "description": "约束内容（可含原文）"
+          },
+          "evidence_span": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "evidence_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "extractor": {
+            "type": "string",
+            "default": "llm.cn.v1"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "default": 1.0
+          },
+          "provenance": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          }
         }
       }
     },
@@ -242,23 +801,88 @@
       "description": "主体-动作授权（v6 新增）：RBAC 授权边界，决策自动化治理层。permission_id 由 (actor, action, effect) 内容寻址——Python 补算。不进入实体-边图谱（build_kg 在 metadata 登记 permission_count）。",
       "items": {
         "type": "object",
-        "required": ["permission_id", "doc_id", "actor", "action", "effect"],
+        "required": [
+          "permission_id",
+          "doc_id",
+          "actor",
+          "action",
+          "effect"
+        ],
         "additionalProperties": false,
         "properties": {
-          "permission_id": { "type": "string", "description": "Python 补算：stable_id(\"permission\", actor, action, effect)" },
-          "doc_id": { "type": "string" },
-          "actor": { "type": "string", "description": "主体（用实体 canonical）" },
-          "action": { "type": "string", "description": "动作（尽量对应 actions 的动作名）" },
-          "effect": { "enum": ["PERMIT", "DENY"], "description": "授权效果独立 2 类枚举：允许→PERMIT，禁止→DENY；判不出用 DENY（默认禁止，最小权限原则）" },
-          "scope": { "type": "string", "description": "授权范围（可空）" },
-          "evidence_span": { "type": ["array", "null"], "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
-          "evidence_text": { "type": ["string", "null"] },
-          "extractor": { "type": "string", "default": "llm.pm.v1" },
-          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 1.0 },
-          "provenance": { "type": ["object", "null"] },
-          "metadata": { "type": "object" },
-          "role": { "type": "string" },
-          "actor_type": { "type": "string", "enum": ["HUMAN", "SYSTEM", "OTHER"] }
+          "permission_id": {
+            "type": "string",
+            "description": "Python 补算：stable_id(\"permission\", actor, action, effect)"
+          },
+          "doc_id": {
+            "type": "string"
+          },
+          "actor": {
+            "type": "string",
+            "description": "主体（用实体 canonical）"
+          },
+          "action": {
+            "type": "string",
+            "description": "动作（尽量对应 actions 的动作名）"
+          },
+          "effect": {
+            "enum": [
+              "PERMIT",
+              "DENY"
+            ],
+            "description": "授权效果独立 2 类枚举：允许→PERMIT，禁止→DENY；判不出用 DENY（默认禁止，最小权限原则）"
+          },
+          "scope": {
+            "type": "string",
+            "description": "授权范围（可空）"
+          },
+          "evidence_span": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "evidence_text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "extractor": {
+            "type": "string",
+            "default": "llm.pm.v1"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "default": 1.0
+          },
+          "provenance": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "role": {
+            "type": "string"
+          },
+          "actor_type": {
+            "type": "string",
+            "enum": [
+              "HUMAN",
+              "SYSTEM",
+              "OTHER"
+            ]
+          }
         }
       }
     },
@@ -267,25 +891,119 @@
       "description": "业务规则（v3 新增）：条件-动作/结论的规范性知识。规则含道义动词（应当/不得/可以）或条件-动作结构（如果/当…时…则…）；纯事实陈述不进 rules。rule_id 由 (subject, condition, action, modality) 内容寻址，Python 补算。",
       "items": {
         "type": "object",
-        "required": ["rule_id", "doc_id", "subject", "condition", "action", "modality"],
+        "required": [
+          "rule_id",
+          "doc_id",
+          "subject",
+          "condition",
+          "action",
+          "modality"
+        ],
         "additionalProperties": false,
         "properties": {
-          "rule_id": { "type": "string", "description": "Python 补算：stable_id(\"rule\", subject, condition, action, modality)" },
-          "doc_id": { "type": "string" },
-          "subject": { "type": "string", "description": "规则主体（谁承担义务/被约束者），可空（纯派生/全局规则）" },
-          "condition": { "type": "string", "description": "触发条件（前件 IF），可空（无条件义务直接\"应当…\"）" },
-          "action": { "type": "string", "description": "动作/结论（后件 THEN），必有" },
-          "modality": { "enum": ["OBLIGATION", "PROHIBITION", "PERMISSION", "CONDITIONAL", "OTHER"], "description": "规则模态独立 5 类枚举：应当/必须/应/须→OBLIGATION；不得/禁止/严禁→PROHIBITION；可以/有权/允许→PERMISSION；无模态词 IF-THEN 推导→CONDITIONAL；判不出用 OTHER" },
-          "evidence_span": { "type": ["array", "null"], "description": "evidence 在原文中的 [start, end]，尽力定位，找不到为 null", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
-          "evidence_text": { "type": ["string", "null"], "description": "LLM 提供的原文短引用（溯源用），契约即规则新增" },
-          "extractor": { "type": "string", "default": "llm.rule.v1" },
-          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 1.0 },
-          "provenance": { "type": ["object", "null"] },
-          "metadata": { "type": "object" },
-          "rule_type": { "type": "string", "enum": ["VALIDATION", "DERIVATION", "TRIGGER", "OTHER"] },
-          "output_type": { "type": "string", "enum": ["", "NUMBER", "PERCENT", "RANK", "BOOLEAN", "ENUM", "STRING", "OTHER"] },
-          "reused_by": { "type": "array", "items": { "type": "string" } },
-          "certainty": { "type": "string", "enum": ["GENERAL", "ENTERPRISE", "OTHER"] }
+          "rule_id": {
+            "type": "string",
+            "description": "Python 补算：stable_id(\"rule\", subject, condition, action, modality)"
+          },
+          "doc_id": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string",
+            "description": "规则主体（谁承担义务/被约束者），可空（纯派生/全局规则）"
+          },
+          "condition": {
+            "type": "string",
+            "description": "触发条件（前件 IF），可空（无条件义务直接\"应当…\"）"
+          },
+          "action": {
+            "type": "string",
+            "description": "动作/结论（后件 THEN），必有"
+          },
+          "modality": {
+            "enum": [
+              "OBLIGATION",
+              "PROHIBITION",
+              "PERMISSION",
+              "CONDITIONAL",
+              "OTHER"
+            ],
+            "description": "规则模态独立 5 类枚举：应当/必须/应/须→OBLIGATION；不得/禁止/严禁→PROHIBITION；可以/有权/允许→PERMISSION；无模态词 IF-THEN 推导→CONDITIONAL；判不出用 OTHER"
+          },
+          "evidence_span": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "description": "evidence 在原文中的 [start, end]，尽力定位，找不到为 null",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "evidence_text": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "LLM 提供的原文短引用（溯源用），契约即规则新增"
+          },
+          "extractor": {
+            "type": "string",
+            "default": "llm.rule.v1"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "default": 1.0
+          },
+          "provenance": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "rule_type": {
+            "type": "string",
+            "enum": [
+              "VALIDATION",
+              "DERIVATION",
+              "TRIGGER",
+              "OTHER"
+            ]
+          },
+          "output_type": {
+            "type": "string",
+            "enum": [
+              "",
+              "NUMBER",
+              "PERCENT",
+              "RANK",
+              "BOOLEAN",
+              "ENUM",
+              "STRING",
+              "OTHER"
+            ]
+          },
+          "reused_by": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "certainty": {
+            "type": "string",
+            "enum": [
+              "GENERAL",
+              "ENTERPRISE",
+              "OTHER"
+            ]
+          }
         }
       }
     },
@@ -294,19 +1012,55 @@
       "description": "entity-aware 切分：绝不从实体中间下刀",
       "items": {
         "type": "object",
-        "required": ["text", "char_start", "char_end", "index"],
+        "required": [
+          "text",
+          "char_start",
+          "char_end",
+          "index"
+        ],
         "additionalProperties": false,
         "properties": {
-          "chunk_id": { "type": "string", "description": "Python 补算" },
-          "doc_id": { "type": "string" },
-          "text": { "type": "string" },
-          "char_start": { "type": "integer", "minimum": 0 },
-          "char_end": { "type": "integer", "minimum": 0 },
-          "index": { "type": "integer", "minimum": 0 },
-          "block_ids": { "type": "array", "items": { "type": "string" } },
-          "mention_ids": { "type": "array", "items": { "type": "string" } },
-          "token_estimate": { "type": "integer", "minimum": 0 },
-          "metadata": { "type": "object" }
+          "chunk_id": {
+            "type": "string",
+            "description": "Python 补算"
+          },
+          "doc_id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "char_start": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "char_end": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "index": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "block_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mention_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "token_estimate": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "metadata": {
+            "type": "object"
+          }
         }
       }
     },
@@ -314,22 +1068,92 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["text", "normalized", "entity_type"],
+        "required": [
+          "text",
+          "normalized",
+          "entity_type"
+        ],
         "additionalProperties": false,
         "properties": {
-          "mention_id": { "type": "string", "description": "Python 用 sha256 补算" },
-          "doc_id": { "type": "string" },
-          "text": { "type": "string", "description": "原文表面形式" },
-          "normalized": { "type": "string", "description": "规范名 canonical，实体唯一身份锚" },
-          "entity_type": { "enum": ["PERSON", "ORGANIZATION", "LOCATION", "DATE", "TIME", "MONEY", "PERCENT", "QUANTITY", "PRODUCT", "EVENT", "CONCEPT", "FINANCIAL_INSTRUMENT", "REGULATION", "FINANCIAL_INDICATOR", "MARKET", "RISK", "TRANS", "SECURITY_CODE", "OTHER"], "description": "16 类封闭枚举（12 通用 + 4 金融扩展），不得自创；判不出用 OTHER" },
-          "char_start": { "type": "integer", "description": "尽力 find 定位；-1 = 未定位（允许）" },
-          "char_end": { "type": "integer", "description": "尽力 find 定位；-1 = 未定位（允许）" },
-          "chunk_id": { "type": ["string", "null"] },
-          "sentence_id": { "type": ["string", "null"] },
-          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 1.0 },
-          "extractor": { "type": "string", "default": "llm.v1", "description": "llm.ner.v1 / llm.rel.synth.v1" },
-          "provenance": { "type": ["object", "null"] },
-          "metadata": { "type": "object" }
+          "mention_id": {
+            "type": "string",
+            "description": "Python 用 sha256 补算"
+          },
+          "doc_id": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "description": "原文表面形式"
+          },
+          "normalized": {
+            "type": "string",
+            "description": "规范名 canonical，实体唯一身份锚"
+          },
+          "entity_type": {
+            "enum": [
+              "PERSON",
+              "ORGANIZATION",
+              "LOCATION",
+              "DATE",
+              "TIME",
+              "MONEY",
+              "PERCENT",
+              "QUANTITY",
+              "PRODUCT",
+              "EVENT",
+              "CONCEPT",
+              "FINANCIAL_INSTRUMENT",
+              "REGULATION",
+              "FINANCIAL_INDICATOR",
+              "MARKET",
+              "RISK",
+              "TRANS",
+              "SECURITY_CODE",
+              "OTHER"
+            ],
+            "description": "16 类封闭枚举（12 通用 + 4 金融扩展），不得自创；判不出用 OTHER"
+          },
+          "char_start": {
+            "type": "integer",
+            "description": "尽力 find 定位；-1 = 未定位（允许）"
+          },
+          "char_end": {
+            "type": "integer",
+            "description": "尽力 find 定位；-1 = 未定位（允许）"
+          },
+          "chunk_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sentence_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "default": 1.0
+          },
+          "extractor": {
+            "type": "string",
+            "default": "llm.v1",
+            "description": "llm.ner.v1 / llm.rel.synth.v1"
+          },
+          "provenance": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          }
         }
       }
     },
@@ -338,23 +1162,90 @@
       "description": "句内 mention 级关系；subject_ref/object_ref 指向 mentions[].mention_id（Python 补算）",
       "items": {
         "type": "object",
-        "required": ["subject_ref", "object_ref", "predicate"],
+        "required": [
+          "subject_ref",
+          "object_ref",
+          "predicate"
+        ],
         "additionalProperties": false,
         "properties": {
-          "relation_id": { "type": "string", "description": "Python 补算" },
-          "doc_id": { "type": "string" },
-          "subject_ref": { "type": "string", "description": "主语实体文本" },
-          "object_ref": { "type": "string", "description": "宾语实体文本或字面量" },
-          "predicate": { "type": "string" },
-          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 1.0 },
-          "chunk_id": { "type": ["string", "null"] },
-          "evidence_span": { "type": ["array", "null"], "description": "evidence 在原文中的 [start, end]，尽力定位，找不到为 null", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 },
-          "evidence_text": { "type": ["string", "null"], "description": "LLM 提供的原文短引用（溯源用），契约即规则新增" },
-          "prop_kind": { "type": "string", "enum": ["FACTUAL", "DEPENDENCY", "CAUSAL", "TRIGGER", ""], "description": "v6 关系传导类型：FACTUAL 普通事实/DEPENDENCY 依赖/CAUSAL 因果/TRIGGER 触发；空串=普通事实" },
-          "strength": { "type": "string", "description": "v6 关系强度：HIGH/MEDIUM/LOW 或原文程度词；空串=未标注" },
-          "extractor": { "type": "string", "default": "llm.v1" },
-          "provenance": { "type": ["object", "null"] },
-          "metadata": { "type": "object" }
+          "relation_id": {
+            "type": "string",
+            "description": "Python 补算"
+          },
+          "doc_id": {
+            "type": "string"
+          },
+          "subject_ref": {
+            "type": "string",
+            "description": "主语实体文本"
+          },
+          "object_ref": {
+            "type": "string",
+            "description": "宾语实体文本或字面量"
+          },
+          "predicate": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "default": 1.0
+          },
+          "chunk_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evidence_span": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "description": "evidence 在原文中的 [start, end]，尽力定位，找不到为 null",
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "evidence_text": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "LLM 提供的原文短引用（溯源用），契约即规则新增"
+          },
+          "prop_kind": {
+            "type": "string",
+            "enum": [
+              "FACTUAL",
+              "DEPENDENCY",
+              "CAUSAL",
+              "TRIGGER",
+              ""
+            ],
+            "description": "v6 关系传导类型：FACTUAL 普通事实/DEPENDENCY 依赖/CAUSAL 因果/TRIGGER 触发；空串=普通事实"
+          },
+          "strength": {
+            "type": "string",
+            "description": "v6 关系强度：HIGH/MEDIUM/LOW 或原文程度词；空串=未标注"
+          },
+          "extractor": {
+            "type": "string",
+            "default": "llm.v1"
+          },
+          "provenance": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          }
         }
       }
     },
@@ -363,26 +1254,147 @@
       "description": "文档级三元组（跨句归并后的最终事实）",
       "items": {
         "type": "object",
-        "required": ["subject", "subject_type", "predicate", "object"],
+        "required": [
+          "subject",
+          "subject_type",
+          "predicate",
+          "object"
+        ],
         "additionalProperties": false,
         "properties": {
-          "triplet_id": { "type": "string", "description": "★ 留空串，Python 补算" },
-          "subject": { "type": "string" },
-          "subject_type": { "enum": ["PERSON", "ORGANIZATION", "LOCATION", "DATE", "TIME", "MONEY", "PERCENT", "QUANTITY", "PRODUCT", "EVENT", "CONCEPT", "FINANCIAL_INSTRUMENT", "REGULATION", "FINANCIAL_INDICATOR", "MARKET", "RISK", "TRANS", "SECURITY_CODE", "OTHER"] },
-          "predicate": { "type": "string" },
-          "object": { "type": "string" },
-          "object_type": { "enum": ["PERSON", "ORGANIZATION", "LOCATION", "DATE", "TIME", "MONEY", "PERCENT", "QUANTITY", "PRODUCT", "EVENT", "CONCEPT", "FINANCIAL_INSTRUMENT", "REGULATION", "FINANCIAL_INDICATOR", "MARKET", "RISK", "TRANS", "SECURITY_CODE", "OTHER", null] },
-          "object_literal": { "type": "boolean", "default": false, "description": "惰性锚点：由 object_type 派生（DATE/MONEY/PERCENT/QUANTITY → true），消费层（build_kg）兜底修正" },
-          "value_type": { "enum": ["DATE", "TIME", "MONEY", "PERCENT", "QUANTITY", "NUMBER", "BOOLEAN", "ENUM", "STRING", "OTHER", null, "DICT_REF", "ENTITY_REF"], "default": null, "description": "属性值类型（独立枚举，非实体类型）：仅属性三元组非空（来自宿主 attributes[].value_type，薄壳校验后透传）；普通关系三元组为 null" },
-          "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 1.0 },
-          "source_mentions": { "type": "array", "items": { "type": "string" } },
-          "chunk_id": { "type": ["string", "null"] },
-          "prop_kind": { "type": "string", "enum": ["FACTUAL", "DEPENDENCY", "CAUSAL", "TRIGGER", ""], "description": "v6 关系传导类型：FACTUAL 普通事实/DEPENDENCY 依赖/CAUSAL 因果/TRIGGER 触发；空串=普通事实" },
-          "strength": { "type": "string", "description": "v6 关系强度：HIGH/MEDIUM/LOW 或原文程度词；空串=未标注" },
-          "extractor": { "type": "string", "default": "llm.v1" },
-          "provenance": { "type": ["object", "null"] },
-          "metadata": { "type": "object" },
-          "required": { "type": "boolean" }
+          "triplet_id": {
+            "type": "string",
+            "description": "★ 留空串，Python 补算"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "subject_type": {
+            "enum": [
+              "PERSON",
+              "ORGANIZATION",
+              "LOCATION",
+              "DATE",
+              "TIME",
+              "MONEY",
+              "PERCENT",
+              "QUANTITY",
+              "PRODUCT",
+              "EVENT",
+              "CONCEPT",
+              "FINANCIAL_INSTRUMENT",
+              "REGULATION",
+              "FINANCIAL_INDICATOR",
+              "MARKET",
+              "RISK",
+              "TRANS",
+              "SECURITY_CODE",
+              "OTHER"
+            ]
+          },
+          "predicate": {
+            "type": "string"
+          },
+          "object": {
+            "type": "string"
+          },
+          "object_type": {
+            "enum": [
+              "PERSON",
+              "ORGANIZATION",
+              "LOCATION",
+              "DATE",
+              "TIME",
+              "MONEY",
+              "PERCENT",
+              "QUANTITY",
+              "PRODUCT",
+              "EVENT",
+              "CONCEPT",
+              "FINANCIAL_INSTRUMENT",
+              "REGULATION",
+              "FINANCIAL_INDICATOR",
+              "MARKET",
+              "RISK",
+              "TRANS",
+              "SECURITY_CODE",
+              "OTHER",
+              null
+            ]
+          },
+          "object_literal": {
+            "type": "boolean",
+            "default": false,
+            "description": "惰性锚点：由 object_type 派生（DATE/MONEY/PERCENT/QUANTITY → true），消费层（build_kg）兜底修正"
+          },
+          "value_type": {
+            "enum": [
+              "DATE",
+              "TIME",
+              "MONEY",
+              "PERCENT",
+              "QUANTITY",
+              "NUMBER",
+              "BOOLEAN",
+              "ENUM",
+              "STRING",
+              "OTHER",
+              null,
+              "DICT_REF",
+              "ENTITY_REF"
+            ],
+            "default": null,
+            "description": "属性值类型（独立枚举，非实体类型）：仅属性三元组非空（来自宿主 attributes[].value_type，薄壳校验后透传）；普通关系三元组为 null"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "default": 1.0
+          },
+          "source_mentions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "chunk_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prop_kind": {
+            "type": "string",
+            "enum": [
+              "FACTUAL",
+              "DEPENDENCY",
+              "CAUSAL",
+              "TRIGGER",
+              ""
+            ],
+            "description": "v6 关系传导类型：FACTUAL 普通事实/DEPENDENCY 依赖/CAUSAL 因果/TRIGGER 触发；空串=普通事实"
+          },
+          "strength": {
+            "type": "string",
+            "description": "v6 关系强度：HIGH/MEDIUM/LOW 或原文程度词；空串=未标注"
+          },
+          "extractor": {
+            "type": "string",
+            "default": "llm.v1"
+          },
+          "provenance": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "required": {
+            "type": "boolean"
+          }
         }
       }
     },
@@ -391,19 +1403,68 @@
       "description": "降级必须出声：任何 fallback 都要登记，绝不静默",
       "items": {
         "type": "object",
-        "required": ["component", "kind", "reason", "fallback", "impact"],
+        "required": [
+          "component",
+          "kind",
+          "reason",
+          "fallback",
+          "impact"
+        ],
         "additionalProperties": false,
         "properties": {
-          "component": { "type": "string", "description": "如 extract.llm / parse.fidelity" },
-          "kind": { "enum": ["model_missing", "unavailable", "no_credential", "rate_limited", "parse_failed", "unsupported_format", "truncated"] },
-          "reason": { "type": "string" },
-          "fallback": { "type": "string", "description": "实际走的路径，如 deterministic.v1" },
-          "impact": { "type": "string", "description": "对结果的具体影响" },
-          "recoverable": { "type": "boolean", "default": true }
+          "component": {
+            "type": "string",
+            "description": "如 extract.llm / parse.fidelity"
+          },
+          "kind": {
+            "enum": [
+              "model_missing",
+              "unavailable",
+              "no_credential",
+              "rate_limited",
+              "parse_failed",
+              "unsupported_format",
+              "truncated"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "fallback": {
+            "type": "string",
+            "description": "实际走的路径，如 deterministic.v1"
+          },
+          "impact": {
+            "type": "string",
+            "description": "对结果的具体影响"
+          },
+          "recoverable": {
+            "type": "boolean",
+            "default": true
+          }
         }
       }
     },
-    "stats": { "type": "object", "description": "含 mode: llm / deterministic，供编排层统计" },
-    "document_meta": { "type": "object", "properties": { "domain": { "type": "string" }, "source": { "type": "string" }, "version": { "type": "string" }, "doc_type": { "type": "string" } } }
+    "stats": {
+      "type": "object",
+      "description": "含 mode: llm / deterministic，供编排层统计"
+    },
+    "document_meta": {
+      "type": "object",
+      "properties": {
+        "domain": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "doc_type": {
+          "type": "string"
+        }
+      }
+    }
   }
 }

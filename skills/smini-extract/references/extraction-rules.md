@@ -461,3 +461,4 @@ permissions: [{ actor, action, effect, scope?, evidence }]
 | 语义 | 实体间事实、字面量、规范、执行步骤 | 生命周期状态、计算定义、时态绑定、处置元信息、结构约束、授权 |
 | 入图 | 关系/属性入图；规则/流程独立 | **全部独立产出，不入图** |
 | 分界 | 宾语是实体→关系；字面量→属性；道义动词→规则；顺序词→流程 | 离散状态+迁移→states；可量化经验→functions；时间限定→temporal；处置动作→actions；结构约束→constraints；谁能做→permissions |
+

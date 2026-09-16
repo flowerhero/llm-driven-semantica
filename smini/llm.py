@@ -446,7 +446,7 @@ class HostAgentLLMProvider(LLMProvider):
     本实现**不读取任何 ``SMINI_LLM_*`` 环境变量**，**不发起任何模型 HTTP
     调用**——模型能力完全来自运行环境的宿主，无需外部 API 凭证。
 
-    用法：::
+    用法：:
 
         llm = HostAgentLLMProvider()
         llm.inject({"entities": [...], "relations": [...]})   # 宿主交卷
