@@ -1,10 +1,14 @@
-"""smini — 知识图谱流水线的精简实现。
+"""smini — 本体抽取的确定性薄壳（extract-only）。
 
-8 步（docs 站口径）：
-    ingest → parse → normalize → extract → build_kg → qa → store → deliver
+契约即规则（Rule-by-Contract）架构：语义抽取（实体-关系三元组、属性、
+业务规则、业务流程、预测决策六件套）由**宿主 agent（大模型）**按约定
+JSON 契约交卷；Python 只保留确定性薄壳——
 
-实现层（`smini.steps`）已按契约（`smini.protocols` 的 select/transform/commit）
-填充完毕，可用 `python -m smini.cli build ...` 端到端运行。
+    ingest（读源原语）→ extract（宿主契约抽取，★核心）→ build_kg（惰性锚点消费层）
+
+可用 ``python -m smini.cli build ...`` 端到端运行；或由宿主 agent 交卷
+契约文件（``--host-contract``）驱动薄壳映射。无任何 ``SMINI_LLM_*``
+凭证依赖，不发起模型 HTTP 调用。
 """
 
 from .ids import (
@@ -46,23 +50,14 @@ from .protocols import (
 )
 from .llm import (
     EXTRACT_SCHEMA,
-    PARSE_SCHEMA,
     HostAgentLLMProvider,
     StubLLMProvider,
     build_extract_prompt,
-    build_parse_prompt,
     default_llm,
 )
-from .ingestors import Ingestor, LocalFileIngestor, default_ingestors
 from .steps import (
     BuildKGStep,
-    DeliverStep,
     ExtractStep,
-    IngestStep,
-    NormalizeStep,
-    ParseStep,
-    QAStep,
-    StoreStep,
 )
 from .types import (
     AttributeValueType,
@@ -148,8 +143,7 @@ __all__ = [
     "build_pipeline", "make_context",
     "GraphStore", "VectorStore", "Embedder", "LLMProvider", "rrf_fuse",
     # 步骤
-    "IngestStep", "ParseStep", "NormalizeStep", "ExtractStep",
-    "BuildKGStep", "QAStep", "StoreStep", "DeliverStep",
+    "ExtractStep", "BuildKGStep",
     # 数据结构
     "RawDocument", "ParsedDocument", "NormalizedDocument", "SpanPatch",
     "ExtractionResult", "Chunk", "EntityMention", "Relation", "Triplet",
@@ -179,8 +173,5 @@ __all__ = [
     "map_span_back", "map_offset_back", "validate_patches", "to_dict",
     # LLM 接缝（智能由宿主 agent 承担：方式 3 · 宿主即 LLM）
     "LLMProvider", "HostAgentLLMProvider", "StubLLMProvider",
-    "EXTRACT_SCHEMA", "PARSE_SCHEMA", "build_extract_prompt", "build_parse_prompt",
-    "default_llm",
-    # 摄取可插拔
-    "Ingestor", "LocalFileIngestor", "default_ingestors",
+    "EXTRACT_SCHEMA", "build_extract_prompt", "default_llm",
 ]
