@@ -287,8 +287,8 @@ pattern 0.7 / rules / huggingface（REBEL 模型，**0.9**）/ llm。`TripletVal
    ```python
    if "id" not in entity_dict and "entity_id" not in entity_dict:
        entity_dict["id"] = (entity_dict.get("name")
-                             or entity_dict.get("text")
-                             or str(hash(str(item))))
+                            or entity_dict.get("text")
+                            or str(hash(str(item))))
    ```
 3. **关系收集**（`:648-722`）：字段映射 `source_id→source`、`subject→source`、`target_id→target`、`object→target`
 4. **实体解析/去重**（`:748-773`）：仅当 `merge_entities=True` 时 `self.entity_resolver` 才存在（`:118-129`）

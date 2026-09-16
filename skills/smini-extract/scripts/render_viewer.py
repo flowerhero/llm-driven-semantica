@@ -365,7 +365,7 @@ _HTML_TPL = """<!DOCTYPE html>
   tr:hover td{background:#F8F7F3;}
   .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;color:#fff;font-weight:500;}
   .ev{color:var(--sub);font-size:12px;font-style:italic;}
-  .ev:before{content:"\201C";}.ev:after{content:"\201D";}
+  .ev:before{content:"\\201C";}.ev:after{content:"\\201D";}
   #graph svg{width:100%;height:auto;display:block;background:#FCFBF8;border:1px solid var(--line);border-radius:10px;touch-action:none;}
   #graph .gnode{cursor:grab;}
   .graph-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
