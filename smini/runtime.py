@@ -1,27 +1,19 @@
 """smini.runtime — Skill 调用的确定性运行时。
 
-Skill-First 架构下，Python 只做 Skill 确实做不到的事（5 类）：
+extract-only 架构下，Python 只做 Skill 确实做不到的事（3 类）：
 
-    ids       sha256 内容寻址 ID —— LLM 算不出，ID 错则幂等崩塌
-    spans     SpanPatch 坐标映射 + 几何校验 —— 逐字符精确，LLM 必错且错得隐蔽
-    graph     建图 / 双时态 / 裁决 / 去重 —— 幂等需位运算级一致
-    validate  JSON Schema 校验 + 保真比对 —— 机械判断，不该花 token
-    retrieve  确定性检索 + Citation 组装 —— 不能靠 LLM 回忆图里有什么
+    ids       sha256 内容寻址 ID 补算 —— LLM 算不出，ID 错则幂等崩塌
+    validate  JSON Schema 校验 + 领域约束 + 软引用检查 —— 机械判断，不该花 token
+    graph     build 建图（惰性锚点消费层）—— 幂等需位运算级一致
 
 每个命令都是「JSON 文件进 → JSON 文件出」的纯函数式变换，
 因为 Skill 在 agent 循环里运行，只能通过文件通信。
 
 用法
 ----
-    python -m smini.cli ingest   --source "file:///a.md" --out runs/x/01-raw.json
-    python -m smini.cli validate parse --in runs/x/02-parsed.json --orig runs/x/01-raw.json
     python -m smini.cli ids      extract --in runs/x/04-extraction.json
-    python -m smini.cli normalize --apply --in runs/x/03-normalized.json --out runs/x/03-normalized.json
+    python -m smini.cli validate extract --in runs/x/04-extraction.json
     python -m smini.cli graph    build --in runs/x/04-extraction.json --out runs/x/05-graph.json
-    python -m smini.cli graph    qa    --in runs/x/05-graph.json --out runs/x/06-qa.json
-    python -m smini.cli graph    store --in runs/x/06-qa.json --out runs/x/07-store.json
-    python -m smini.cli deliver  --query "特斯拉 总部" --in runs/x/06-qa.json --out runs/x/08-package.json
-    python -m smini.cli fallback extract --in runs/x/03-normalized.json --out runs/x/04-extraction.json
 """
 
 from __future__ import annotations
@@ -43,8 +35,6 @@ from .ids import (
     action_id,
     chunk_id,
     constraint_id,
-    content_hash,
-    doc_id,
     edge_id,
     entity_id,
     flow_id,
@@ -277,15 +267,11 @@ def validate_against_schema(
 _CONTRACTS_DIR = Path(__file__).resolve().parent.parent / "contracts"
 
 _SCHEMA_OF = {
-    "raw": "raw.schema.json",
-    "parsed": "parsed.schema.json",
-    "normalized": "normalized.schema.json",
     "extraction": "extraction.schema.json",
-    "graph": "graph.schema.json",
 }
 
-# 允许用 step 名当别名（Skill 里更自然：validate parse / validate extract）
-_ALIAS = {"parse": "parsed", "extract": "extraction", "kg": "graph", "qa": "graph"}
+# 允许用 step 名当别名（Skill 里更自然：validate extract）
+_ALIAS = {"extract": "extraction"}
 
 
 def load_schema(name: str) -> dict:
@@ -299,60 +285,12 @@ def load_schema(name: str) -> dict:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-# --------------------------------------------------------------------------
-# 命令：ingest
-# --------------------------------------------------------------------------
-
-
-def cmd_ingest(sources: Sequence[str], out: str) -> int:
-    from .steps.ingest import resolve_source
-
-    docs = [resolve_source(s) for s in sources]
-    data = []
-    for d in docs:
-        dd = to_dict(d)
-        dd["content"] = base64.b64encode(d.content).decode("ascii")
-        data.append(dd)
-    dump_json(out, data)
-    print(f"[ingest] {len(data)} 个 RawDocument → {out}")
-    for d in data:
-        print(f"  doc_id={d['doc_id'][:16]}… uri={d['source']['uri']} bytes={d['size_bytes']}")
-    return 0
-
-
-# --------------------------------------------------------------------------
-# 命令：ids —— 补算内容寻址 ID（LLM 绝不出 ID）
-# --------------------------------------------------------------------------
-
-
 def cmd_ids(what: str, inp: str, out: str | None = None) -> int:
     data = load_json(inp)
     target = out or inp
     n = 0
 
-    if what == "raw":
-        for i, d in enumerate(data):
-            # content 必须无条件校验：即使 ID 已填过，content 损坏也说明数据不一致。
-            # 若只在「ID 缺失」分支里解码，坏数据会因跳过校验而静默通过。
-            try:
-                raw = base64.b64decode(d.get("content", ""), validate=True)
-            except Exception as exc:  # noqa: BLE001
-                print(
-                    f"[ids] ✗ 第 {i} 个文档 content 非合法 base64：{exc}",
-                    file=sys.stderr,
-                )
-                return 1
-            if not d.get("checksum") or not d.get("doc_id"):
-                uri = d.get("source", {}).get("uri", "")
-                ch = content_hash(raw)
-                d["checksum"] = ch
-                d["source"]["checksum"] = ch
-                d["size_bytes"] = len(raw)
-                if not d.get("doc_id"):
-                    d["doc_id"] = doc_id(uri, raw)
-                n += 1
-
-    elif what == "extract":
+    if what == "extract":
         doc_id_ = data.get("doc_id", "")
         for m in data.get("mentions", []):
             if not m.get("mention_id"):
@@ -494,23 +432,8 @@ def cmd_ids(what: str, inp: str, out: str | None = None) -> int:
                 )
                 n += 1
 
-    elif what == "graph":
-        for e in (data.get("entities") or {}).values() if isinstance(data.get("entities"), dict) else []:
-            if not e.get("entity_id"):
-                e["entity_id"] = entity_id(e["entity_type"], e["canonical_name"])
-                n += 1
-        for versions in (data.get("edges") or {}).values() if isinstance(data.get("edges"), dict) else []:
-            for e in versions:
-                if not e.get("edge_id"):
-                    e["edge_id"] = edge_id(
-                        e.get("subject_id", ""),
-                        e.get("predicate", ""),
-                        e.get("object_id"),
-                        e.get("object_literal"),
-                    )
-                    n += 1
     else:
-        print(f"未知 ids 目标：{what}（可选 raw/extract/graph）", file=sys.stderr)
+        print(f"未知 ids 目标：{what}（可选 extract）", file=sys.stderr)
         return 2
 
     dump_json(target, data)
@@ -518,137 +441,13 @@ def cmd_ids(what: str, inp: str, out: str | None = None) -> int:
     return 0
 
 
-# --------------------------------------------------------------------------
-# 命令：spans —— 补算区块坐标（LLM 给文本与类型，Python 定位 span）
-# --------------------------------------------------------------------------
-
-
-def cmd_spans(what: str, inp: str, out: str | None = None) -> int:
-    """补算 block 的 block_id 与 char_start/char_end。
-
-    LLM 只需给出区块的 kind 与文本内容，坐标由 Python 精确定位 —— 逐字符算
-    偏移 LLM 几乎必错，而且错得**自洽**（block.text 取自切片，校验查不出来），
-    会静默污染下游所有溯源。
-    """
-    if what != "parse":
-        print(f"未知 spans 目标：{what!r}（当前仅支持 parse）", file=sys.stderr)
-        return 2
-
-    data = load_json(inp)
-    target = out or inp
-    docs = data if isinstance(data, list) else [data]
-    n_id = n_span = 0
-
-    for d in docs:
-        text = d.get("text", "") or ""
-        doc_id_ = d.get("doc_id", "")
-        search_from = 0
-        for order, b in enumerate(d.get("blocks") or []):
-            if not b.get("block_id"):
-                b["block_id"] = stable_id("block", doc_id_, order, prefix="b_")
-                n_id += 1
-            if b.get("order") != order:
-                b["order"] = order
-
-            bt = b.get("text", "") or ""
-            s, e = b.get("char_start"), b.get("char_end")
-            ok = (isinstance(s, int) and isinstance(e, int)
-                  and 0 <= s < e <= len(text) and text[s:e] == bt)
-            if not ok:
-                # 顺序定位：从上一个区块末尾起找。若每次都从头 find，
-                # 重复段落会全部定位到第一处。
-                i = text.find(bt, search_from)
-                if i < 0:
-                    i = text.find(bt)  # 回退：全文本找一次
-                if i < 0:
-                    print(
-                        f"[spans] ✗ 区块 order={order} (kind={b.get('kind')}) "
-                        f"的文本在 text 中找不到：{bt[:40]!r}",
-                        file=sys.stderr,
-                    )
-                    return 1
-                b["char_start"], b["char_end"] = i, i + len(bt)
-                n_span += 1
-            search_from = int(b["char_end"])
-
-    dump_json(target, data)
-    print(f"[spans] 补算 block_id {n_id} 个 / span {n_span} 个 → {target}")
-    return 0
-
-
-# --------------------------------------------------------------------------
-# 命令：validate —— Schema + 领域约束
-# --------------------------------------------------------------------------
-
-
-# 文档级契约：定义放在 definitions，顶层按形态（单文档 / 批次数组）分发校验
-_DOC_LEVEL = {"parsed": "ParsedDocument"}
-
-
-def _check_parsed_doc(doc: dict, errs: list[str], path: str,
-                      orig_text: str | None) -> None:
-    """ParsedDocument 的领域约束（Schema 表达不了的部分）。"""
-    text = doc.get("text", "") or ""
-    blocks = doc.get("blocks") or []
-
-    for i, b in enumerate(blocks):
-        s, e = int(b.get("char_start", -1)), int(b.get("char_end", -1))
-        if not (0 <= s < e <= len(text)):
-            errs.append(f"{path}.blocks[{i}]: span 越界 [{s},{e}) 不在 0..{len(text)}")
-        elif text[s:e] != b.get("text"):
-            errs.append(
-                f"{path}.blocks[{i}]: block.text 与 text[{s}:{e}] 不一致（保真失败）"
-            )
-        # 类型专属必填：table 必须有二维单元格，heading 必须有层级
-        if b.get("kind") == "table" and not b.get("rows"):
-            errs.append(f"{path}.blocks[{i}]: table 区块缺 rows（二维单元格）")
-        if b.get("kind") == "heading" and b.get("level") is None:
-            errs.append(f"{path}.blocks[{i}]: heading 区块缺 level")
-
-    orders = [b.get("order") for b in blocks]
-    if orders and orders != sorted(orders):
-        errs.append(f"{path}.blocks: order 未全局单调递增")
-
-    if orig_text is not None:
-        diff = abs(len(text) - len(orig_text))
-        thr = max(8, int(0.05 * len(orig_text)))
-        if diff > thr:
-            errs.append(
-                f"{path}: 保真失败：解析文本长度 {len(text)} vs 原文 {len(orig_text)}，"
-                f"偏差 {diff} > 阈值 {thr}"
-            )
-
-
-def cmd_validate(what: str, inp: str, orig: str | None = None) -> int:
+def cmd_validate(what: str, inp: str) -> int:
     data = load_json(inp)
     errs: list[str] = []
 
-    if what in ("graph", "kg", "qa") and isinstance(data, dict) and "entities" in data:
-        # graph 契约兼容两种形态：QAResult（含 graph 键）与裸 KnowledgeGraph
-        root = load_schema("graph")
-        errs.extend(validate_against_schema(
-            data, root["definitions"]["KnowledgeGraph"], "$", root))
-    elif what in _DOC_LEVEL:
-        # 顶层 type 为 ["object","array"] 且无 properties，按实际形态分发；
-        # 数组时逐元素校验（此前直接 .get() 会崩，多文档批次无法校验）
-        root = load_schema(what)
-        sub = root["definitions"][_DOC_LEVEL[what]]
-        docs = data if isinstance(data, list) else [data]
-        raws = load_json(orig) if orig else None
-        if raws is not None and not isinstance(raws, list):
-            raws = [raws]
-        for i, doc in enumerate(docs):
-            path = "$" if isinstance(data, dict) else f"$[{i}]"
-            errs.extend(validate_against_schema(doc, sub, path, root))
-            ot = None
-            if raws is not None and i < len(raws):
-                r0 = raws[i] or {}
-                rb = base64.b64decode(r0.get("content", "")) if isinstance(r0.get("content"), str) else b""
-                ot = rb.decode("utf-8", errors="replace")
-            _check_parsed_doc(doc, errs, path, ot)
-    else:
-        root = load_schema(what)
-        errs.extend(validate_against_schema(data, root, "$", root))
+    # Schema 校验（extract-only 架构只有 extraction 契约；extract 为别名）
+    root = load_schema(what)
+    errs.extend(validate_against_schema(data, root, "$", root))
 
     # 领域约束（Schema 表达不了的）
     if what == "extraction":
@@ -761,15 +560,6 @@ def cmd_validate(what: str, inp: str, orig: str | None = None) -> int:
         for w in warns:
             print(f"[validate] ⚠ {w}", file=sys.stderr)
 
-    elif what == "normalized":
-        for i, p in enumerate(data.get("patches", [])):
-            s, e = int(p.get("orig_start", -1)), int(p.get("orig_end", -1))
-            if s < 0 or e < s:
-                errs.append(f"$.patches[{i}]: 非法 orig span [{s},{e})")
-            orig_text = data.get("text", "")
-            if 0 <= s < e <= len(orig_text) and orig_text[s:e] != p.get("original"):
-                errs.append(f"$.patches[{i}]: original 与 text[{s}:{e}] 不一致")
-
     if errs:
         print(f"[validate] ✗ {what} 校验失败（{len(errs)} 项）：", file=sys.stderr)
         for e in errs[:20]:
@@ -781,101 +571,7 @@ def cmd_validate(what: str, inp: str, orig: str | None = None) -> int:
 
 
 # --------------------------------------------------------------------------
-# 命令：normalize --apply —— 执行 LLM 提议的 patch（坐标由 Python 算）
-# --------------------------------------------------------------------------
-
-
-def cmd_normalize_apply(inp: str, out: str | None = None) -> int:
-    data = load_json(inp)
-    target = out or inp
-    text = data.get("text", "")
-    proposals = data.get("patches", []) or []
-
-    # 按 orig_start 排序（LLM 应已排好，这里兜底）
-    proposals = sorted(proposals, key=lambda p: (int(p.get("orig_start", 0)), int(p.get("orig_end", 0))))
-
-    parts: list[str] = []
-    applied: list[dict] = []
-    cursor = 0      # 中间态文本的当前位置
-    cum = 0         # 累积漂移
-
-    for p in proposals:
-        s, e = int(p["orig_start"]), int(p["orig_end"])
-        original = p.get("original", "")
-        replacement = p.get("replacement", "")
-        if s < cursor:
-            # 与已应用的区间重叠 → 跳过并告警
-            data.setdefault("warnings", []).append(
-                f"patch 区间 [{s},{e}) 与已应用区间重叠（cursor={cursor}），已跳过"
-            )
-            continue
-        parts.append(text[cursor:s])
-        parts.append(replacement)
-        new_s = s + cum
-        new_e = new_s + len(replacement)
-        cum += len(replacement) - (e - s)
-        applied.append({
-            "orig_start": s, "orig_end": e,
-            "new_start": new_s, "new_end": new_e,
-            "kind": p.get("kind", "other"),
-            "original": original, "replacement": replacement,
-        })
-        cursor = e
-
-    parts.append(text[cursor:])
-    norm = "".join(parts)
-
-    # 几何校验（types.validate_patches 的三条约束）
-    patches = [revive(T.SpanPatch, p) for p in applied]
-    geo_err: str | None = None
-    try:
-        T.validate_patches(patches)
-    except Exception as exc:  # noqa: BLE001
-        geo_err = f"SpanPatch 几何约束违反：{exc}"
-
-    if geo_err:
-        print(f"[normalize] ✗ {geo_err}", file=sys.stderr)
-        data.setdefault("warnings", []).append(geo_err)
-        dump_json(target, data)
-        return 1
-
-    data["text"] = norm
-    data["patches"] = applied
-
-    # block span 重映射（orig → norm），越界保护
-    def fwd(off: int, at_end: bool = False) -> int:
-        res = off
-        for p in patches:
-            if p.orig_end <= off:
-                res += p.delta
-            elif p.orig_start <= off < p.orig_end:
-                return p.new_end if at_end else p.new_start
-            else:
-                break
-        return max(res, 0)
-
-    for b in data.get("blocks", []) or []:
-        s, e = int(b.get("char_start", 0)), int(b.get("char_end", 0))
-        ns, ne = fwd(s), fwd(e, at_end=True)
-        if 0 <= ns < ne <= len(norm):
-            b["char_start"], b["char_end"] = ns, ne
-        # 越界则保留原坐标（不静默错位）
-
-    # 规则实体的 mention_id 补算
-    did = data.get("doc_id", "")
-    for m in data.get("mentions", []) or []:
-        if not m.get("mention_id"):
-            m["mention_id"] = mention_id(
-                did, int(m.get("char_start", 0)), int(m.get("char_end", 0)), m.get("text", "")
-            )
-
-    dump_json(target, data)
-    print(f"[normalize] ✓ 应用 {len(applied)} 个 patch：{len(text)} → {len(norm)} 字符 → {target}")
-    return 0
-
-
-# --------------------------------------------------------------------------
-# 命令：graph build / qa / store
+# 命令：graph build —— 建图（惰性锚点消费层）
 # --------------------------------------------------------------------------
 
 
@@ -916,206 +612,6 @@ def cmd_graph_build(inp: str, out: str, disambiguation: str | None = None) -> in
     return 0
 
 
-def cmd_graph_qa(inp: str, out: str, suggestions: str | None = None) -> int:
-    """质检：冲突检测 + 去重，产出已修复图谱。"""
-    from .steps.qa import QAStep
-
-    g = revive(T.KnowledgeGraph, load_json(inp))
-    ctx = _ctx()
-
-    # LLM 同义谓词归并 → 注入 ctx，QAStep 内部会读取
-    pred_norm: dict[str, str] = {}
-    semantic_conflicts: list[dict] = []
-    if suggestions:
-        sug = load_json(suggestions)
-        for grp in (sug.get("predicate_normalization", {}).get("groups", []) if isinstance(sug, dict) else []):
-            for v in grp.get("variants", []):
-                pred_norm[v] = grp.get("canonical", v)
-        semantic_conflicts = (sug.get("conflicts", []) if isinstance(sug, dict) else []) or []
-    if pred_norm:
-        ctx.config["predicate_normalization"] = pred_norm
-
-    result = QAStep().transform(g, ctx)
-
-    # LLM 报的语义冲突：Python 侧未能自动覆盖的，合并进来
-    if semantic_conflicts:
-        have = {(c.subject_id, c.predicate) for c in result.conflicts}
-        for c in semantic_conflicts:
-            key = (c.get("subject_id"), c.get("predicate"))
-            if key in have:
-                continue
-            try:
-                result.conflicts.append(revive(T.Conflict, c))
-                result.metrics.unresolved_count += 0 if c.get("resolution") else 1
-            except Exception:  # noqa: BLE001
-                continue
-        result.metrics.conflict_count = len(result.conflicts)
-
-    dump_json(out, to_dict(result))
-    m = result.metrics
-    print(f"[graph qa] 冲突 {m.conflict_count} / 未决 {m.unresolved_count} / "
-          f"重复集群 {m.duplicate_cluster_count} / 合并 {m.entities_merged} → {out}")
-    print(f"  passed={'true' if m.unresolved_count == 0 else 'false'}"
-          f"{'' if m.unresolved_count == 0 else '  ★ 不得进入 Store'}")
-    return 0
-
-
-def cmd_graph_store(inp: str, out: str, backend: str = "memory") -> int:
-    """落库：强制 upsert 语义。"""
-    from .steps.qa import QAStep  # noqa: F401  (保证 import 顺序无副作用)
-    from .steps.store import StoreStep
-
-    data = load_json(inp)
-    # 兼容：既接受 QAResult（含 graph），也接受裸 KnowledgeGraph
-    if isinstance(data, dict) and "graph" in data:
-        if int(data.get("metrics", {}).get("unresolved_count", 0)) > 0:
-            print("[graph store] ✗ QA 存在未裁决冲突，拒绝落库", file=sys.stderr)
-            return 1
-        graph = data["graph"]
-    else:
-        graph = data
-
-    g = revive(T.KnowledgeGraph, graph)
-    # StoreStep 吃的是 QAResult（含 .graph），裸图需包一层
-    qa = revive(T.QAResult, data) if isinstance(data, dict) and "graph" in data else T.QAResult(graph=g)
-    ctx = _ctx()
-
-    from .stores import MemoryGraphStore
-    store = MemoryGraphStore()
-
-    # json 后端：先加载已有库，让 upsert 的「更新」分支真正生效
-    # （这样跨进程复跑也能验证幂等：第二次 written 应为 0）
-    lib_path: Path | None = None
-    if backend == "json":
-        lib_path = Path(out).with_name("graph-store.json")
-        if lib_path.exists():
-            try:
-                old = revive(T.KnowledgeGraph, load_json(str(lib_path)))
-                for e in old.entities.values():
-                    store.entities[e.entity_id] = e
-                for k, vs in old.edges.items():
-                    store.edges[k] = list(vs)
-                ctx.log("info", f"store: 已从 {lib_path} 载入现有库")
-            except Exception as exc:  # noqa: BLE001
-                print(f"[graph store] 载入现有库失败（按空库处理）：{exc}", file=sys.stderr)
-
-    receipt = StoreStep(store=store).transform(qa, ctx)
-    # 回执要如实反映实际使用的后端（store.backend 恒为 memory；frozen 需 replace）
-    if receipt.backend != backend:
-        receipt = dataclasses.replace(receipt, backend=backend)
-
-    if lib_path is not None:
-        dump_json(str(lib_path), {
-            "entities": {k: to_dict(v) for k, v in store.entities.items()},
-            "edges": {k: [to_dict(e) for e in vs] for k, vs in store.edges.items()},
-        })
-
-    dump_json(out, to_dict(receipt))
-    r = receipt
-    print(f"[graph store] backend={r.backend} 实体 +{r.entities_written}/~{r.entities_updated} "
-          f"边 +{r.edges_written}/~{r.edges_updated} idempotent={r.idempotent} → {out}")
-    return 0
-
-
-# --------------------------------------------------------------------------
-# 命令：deliver —— 确定性检索 + Citation
-# --------------------------------------------------------------------------
-
-
-def cmd_deliver(query: str, inp: str, out: str, answer: str | None = None) -> int:
-    from .steps.deliver import DeliverStep
-
-    data = load_json(inp)
-    graph = data.get("graph", data) if isinstance(data, dict) else data
-    g = revive(T.KnowledgeGraph, graph)
-    ctx = _ctx()
-    # DeliverStep 从 ctx.config["deliver"]["query"] 读查询
-    ctx.config["deliver"] = {"query": query}
-
-    # 它吃的是 QAResult（含 .graph），裸图需包一层
-    qa = revive(T.QAResult, data) if isinstance(data, dict) and "graph" in data else T.QAResult(graph=g)
-    pkg = DeliverStep().transform(qa, ctx)
-    if answer is not None:
-        pkg.answer = answer
-    dump_json(out, to_dict(pkg))
-    print(f"[deliver] query={query!r} → {len(pkg.facts)} 条事实 / "
-          f"{len(pkg.citations)} 条引用 → {out}")
-    return 0
-
-
-# --------------------------------------------------------------------------
-# 命令：fallback —— 确定性兜底（Skill/LLM 不可用时）
-# --------------------------------------------------------------------------
-
-
-def cmd_fallback(step: str, inp: str, out: str | None = None) -> int:
-    """走确定性实现，并在产物里登记 Degradation。"""
-    target = out or inp
-    data = load_json(inp)
-    ctx = _ctx()
-    result: Any = None
-    component = f"{step}.llm"
-
-    if step == "parse":
-        from .steps.parse import ParseStep
-        raws = data if isinstance(data, list) else [data]
-        docs = [revive(T.RawDocument, _b64_to_bytes(d)) for d in raws]
-        result = ParseStep().transform(docs, ctx)
-
-    elif step == "normalize":
-        from .steps.normalize import NormalizeStep
-        docs = data if isinstance(data, list) else [data]
-        parsed = [revive(T.ParsedDocument, d) for d in docs]
-        result = NormalizeStep().transform(parsed, ctx)
-
-    elif step == "extract":
-        print("[fallback] ✗ 零规则架构已删除确定性抽取：extract 必须走 LLM 或 Skill",
-              file=sys.stderr)
-        return 2
-
-    else:
-        print(f"fallback 暂不支持 step={step!r}（可选 parse/normalize/extract）", file=sys.stderr)
-        return 2
-
-    out_data = to_dict(result)
-    if isinstance(out_data, list):
-        out_data = out_data[0] if len(out_data) == 1 else out_data
-
-    # 登记 Degradation（降级必须出声）
-    deg = {
-        "component": component,
-        "kind": "unavailable",
-        "reason": "Skill/LLM 路径不可用，回退确定性实现",
-        "fallback": "deterministic.v1",
-        "impact": "覆盖率低于 LLM 路径（仅规则/正则能识别的模式）",
-        "recoverable": True,
-    }
-    if isinstance(out_data, dict):
-        out_data.setdefault("degradations", []).append(deg)
-        stats = out_data.setdefault("stats", {})
-        if isinstance(stats, dict):
-            stats["mode"] = "deterministic"
-        if step == "parse":
-            out_data.setdefault("warnings", []).append("已回退确定性解析")
-
-    dump_json(target, out_data)
-    print(f"[fallback] {step} 走确定性路径，已登记 Degradation → {target}")
-    return 0
-
-
-def _b64_to_bytes(d: dict) -> dict:
-    """RawDocument 的 content 在 JSON 里是 base64，还原成 bytes。"""
-    if isinstance(d, dict) and isinstance(d.get("content"), str):
-        d = dict(d)
-        d["content"] = base64.b64decode(d["content"])
-    return d
-
-
-# --------------------------------------------------------------------------
-# 分发
-# --------------------------------------------------------------------------
-
-
 def run(argv: Sequence[str]) -> int:
     import argparse
 
@@ -1124,76 +620,29 @@ def run(argv: Sequence[str]) -> int:
         return 2
     cmd, *rest = argv
 
-    if cmd == "ingest":
-        p = argparse.ArgumentParser(prog="smini ingest")
-        p.add_argument("--source", action="append", default=[], required=True)
-        p.add_argument("--out", required=True)
-        a = p.parse_args(rest)
-        return cmd_ingest(a.source, a.out)
-
     if cmd == "ids":
         p = argparse.ArgumentParser(prog="smini ids")
-        p.add_argument("what", choices=["raw", "extract", "graph"])
+        p.add_argument("what", choices=["extract"])
         p.add_argument("--in", dest="inp", required=True)
         p.add_argument("--out", default=None)
         a = p.parse_args(rest)
         return cmd_ids(a.what, a.inp, a.out)
 
-    if cmd == "spans":
-        p = argparse.ArgumentParser(prog="smini spans")
-        p.add_argument("what", choices=["parse"])
-        p.add_argument("--in", dest="inp", required=True)
-        p.add_argument("--out", default=None)
-        a = p.parse_args(rest)
-        return cmd_spans(a.what, a.inp, a.out)
-
     if cmd == "validate":
         p = argparse.ArgumentParser(prog="smini validate")
         p.add_argument("what", choices=sorted(_SCHEMA_OF) + sorted(_ALIAS))
         p.add_argument("--in", dest="inp", required=True)
-        p.add_argument("--orig", default=None, help="原始文件（parse 保真比对用）")
         a = p.parse_args(rest)
-        return cmd_validate(a.what, a.inp, a.orig)
-
-    if cmd == "normalize":
-        p = argparse.ArgumentParser(prog="smini normalize")
-        p.add_argument("--apply", action="store_true", required=True)
-        p.add_argument("--in", dest="inp", required=True)
-        p.add_argument("--out", default=None)
-        a = p.parse_args(rest)
-        return cmd_normalize_apply(a.inp, a.out)
+        return cmd_validate(a.what, a.inp)
 
     if cmd == "graph":
         p = argparse.ArgumentParser(prog="smini graph")
-        p.add_argument("what", choices=["build", "qa", "store"])
+        p.add_argument("what", choices=["build"])
         p.add_argument("--in", dest="inp", required=True)
         p.add_argument("--out", required=True)
         p.add_argument("--disambiguation", default=None)
-        p.add_argument("--suggestions", default=None)
-        p.add_argument("--backend", default="memory")
         a = p.parse_args(rest)
-        if a.what == "build":
-            return cmd_graph_build(a.inp, a.out, a.disambiguation)
-        if a.what == "qa":
-            return cmd_graph_qa(a.inp, a.out, a.suggestions)
-        return cmd_graph_store(a.inp, a.out, a.backend)
-
-    if cmd == "deliver":
-        p = argparse.ArgumentParser(prog="smini deliver")
-        p.add_argument("--query", required=True)
-        p.add_argument("--in", dest="inp", required=True)
-        p.add_argument("--out", required=True)
-        p.add_argument("--answer", default=None)
-        a = p.parse_args(rest)
-        return cmd_deliver(a.query, a.inp, a.out, a.answer)
-
-    if cmd == "fallback":
-        p = argparse.ArgumentParser(prog="smini fallback")
-        p.add_argument("step", choices=["parse", "normalize", "extract"])
-        p.add_argument("--in", dest="inp", required=True)
-        p.add_argument("--out", default=None)
-        a = p.parse_args(rest)
-        return cmd_fallback(a.step, a.inp, a.out)
+        return cmd_graph_build(a.inp, a.out, a.disambiguation)
 
     print(f"未知子命令：{cmd}", file=sys.stderr)
     return 2

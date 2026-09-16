@@ -306,35 +306,6 @@ EXTRACT_SCHEMA: dict[str, Any] = {
     "required": ["entities", "relations"],
 }
 
-_PARSE_KINDS = [
-    "paragraph", "heading", "table", "code", "list_item", "quote",
-    "caption", "image_ref", "footnote", "metadata",
-]
-
-PARSE_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "text": {"type": "string"},
-        "blocks": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "kind": {"type": "string", "enum": _PARSE_KINDS},
-                    "text": {"type": "string"},
-                    "level": {"type": "integer"},
-                    "rows": {
-                        "type": "array",
-                        "items": {"type": "array", "items": {"type": "string"}},
-                    },
-                },
-                "required": ["kind", "text"],
-            },
-        },
-    },
-    "required": ["text", "blocks"],
-}
-
 
 def build_extract_prompt(text: str, doc_hint: str = "") -> str:
     """构造抽取 user prompt。system 指令由 provider 注入。
@@ -455,21 +426,6 @@ def build_extract_prompt(text: str, doc_hint: str = "") -> str:
     )
 
 
-def build_parse_prompt(text: str, fmt_label: str) -> str:
-    return (
-        f"请把下面的{fmt_label}原始文档解析成「统一结构化文本 + 版式区块」。\n"
-        "要求：\n"
-        "1. text：文档的完整纯文本（**逐字保留原文，不要增删改**，长度须与原文一致）。\n"
-        "2. blocks：按阅读顺序的版式区块，每个含 kind（"
-        f"{'/'.join(_PARSE_KINDS)}）、text（该块纯文本）、"
-        "标题可带 level、表格带 rows（二维字符串数组）。\n"
-        "只输出 JSON，不要任何解释。\n\n"
-        "==== 原始文档开始 ====\n"
-        f"{text}\n"
-        "==== 原始文档结束 ===="
-    )
-
-
 # ---------------------------------------------------------------------------
 # 生产实现：宿主 agent（豆包）充当 LLM
 # ---------------------------------------------------------------------------
@@ -478,18 +434,14 @@ _SYSTEM_EXTRACT = (
     "你是知识图谱抽取引擎。严格按用户给出的 JSON Schema 输出，"
     "只返回 JSON 对象，不要 markdown 代码块、不要解释。"
 )
-_SYSTEM_PARSE = (
-    "你是文档版式解析引擎。严格按用户给出的 JSON Schema 输出，"
-    "text 必须与原文逐字一致。只返回 JSON 对象，不要解释。"
-)
 
 
 class HostAgentLLMProvider(LLMProvider):
     """宿主 agent（豆包）充当 LLM 的 provider（方式 3 · 宿主即 LLM）。
 
-    语义：抽取 / 解析的「智能」由**宿主**承担——宿主读文档后按契约产出
-    ``{entities:[...], relations:[...]}``（抽取）或 ``{text, blocks}``（解析），
-    通过 ``inject()`` 注入本 provider；Python 薄壳只做确定性映射。
+    语义：抽取的「智能」由**宿主**承担——宿主读文档后按契约产出
+    ``{entities:[...], relations:[...]}`` 等十一件套，通过 ``inject()``
+    注入本 provider；Python 薄壳只做确定性映射。
 
     本实现**不读取任何 ``SMINI_LLM_*`` 环境变量**，**不发起任何模型 HTTP
     调用**——模型能力完全来自运行环境的宿主，无需外部 API 凭证。
