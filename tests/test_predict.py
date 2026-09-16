@@ -268,10 +268,10 @@ class PredictFullPipelineTest(unittest.TestCase):
     def test_full_pipeline_with_six_sets(self):
         """全链路：六件套作为独立产出保留，不破坏原有链路。"""
         stub = _make_stub(_SAMPLE, _LLM_EXTRACT)
-        ctx = make_context([_SAMPLE], query="适当性管理")
-        pipeline = build_pipeline([_SAMPLE], llm=stub, query="适当性管理")
+        ctx = make_context([_SAMPLE])
+        pipeline = build_pipeline([_SAMPLE], llm=stub)
         state, results = pipeline.run(ctx=ctx)
-        self.assertEqual(len(results), 8)
+        self.assertEqual(len(results), 3)  # extract-only：ingest → extract → build_kg
         self.assertEqual(state.extractions[0].stats["states"], 1)
         self.assertEqual(state.extractions[0].stats["permissions"], 1)
         self.assertEqual(len(state.extractions[0].states), 1)

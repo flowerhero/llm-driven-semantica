@@ -173,10 +173,10 @@ class AttributeFullPipelineTest(unittest.TestCase):
     def test_full_pipeline_with_attributes(self):
         """全链路：属性进入图谱并统计。"""
         stub = _make_stub(_SAMPLE, _LLM_EXTRACT)
-        ctx = make_context([_SAMPLE], query="特斯拉公司")
-        pipeline = build_pipeline([_SAMPLE], llm=stub, query="特斯拉公司")
+        ctx = make_context([_SAMPLE])
+        pipeline = build_pipeline([_SAMPLE], llm=stub)
         state, results = pipeline.run(ctx=ctx)
-        self.assertEqual(len(results), 8)
+        self.assertEqual(len(results), 3)  # extract-only：ingest → extract → build_kg
         # 属性作为字面量边进入图谱
         tesla = next(e for e in state.graph.entities.values()
                      if e.canonical_name == "特斯拉公司")
