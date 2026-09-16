@@ -1,4 +1,6 @@
-"""smini.steps.extract — Step 4 · Extract（契约即规则 · 零规则薄壳）
+"""smini.steps.extract — Extract（契约即规则 · 零规则薄壳）
+
+extract-only 架构下为本流水线的**核心步骤**（宿主 LLM 契约抽取）。
 
 v2 删除全部确定性抽取规则：正则 NER、8 条关系模式、伪实体黑名单、
 entity-aware 切分、确定性 fallback。**LLM 是唯一抽取引擎**，本 step
@@ -87,15 +89,29 @@ _LITERAL_TYPES = {
 }
 
 
+def _normalized_from_raw(rd) -> NormalizedDocument:
+    """extract-only 适配：RawDocument（字节）→ NormalizedDocument（纯文本）。
+
+    摄入/归一化外包宿主后，解析步骤已删除；本步直接消费输入层的
+    ``RawDocument.content``（UTF-8 解码，坏字节以替换符兜底）。
+    """
+    text = rd.content.decode("utf-8", errors="replace")
+    return NormalizedDocument(doc_id=rd.doc_id, source=rd.source, text=text)
+
+
 class ExtractStep(PipelineStep[list, list[ExtractionResult]]):
-    """把 NormalizedDocument 列表抽成 ExtractionResult 列表（零规则薄壳）。"""
+    """把归一化文档列表抽成 ExtractionResult 列表（零规则薄壳）。"""
 
     name = "extract"
-    reads = ("normalized",)
+    reads = ("raw",)
     writes = ("extractions",)
 
     def select(self, state: PipelineState):
-        return state.normalized
+        # extract-only 输入适配：优先消费宿主直投的 normalized（驱动脚本手写
+        # 03-normalized.json 的场景），否则从输入层产出的 raw 构造纯文本文档。
+        if getattr(state, "normalized", None):
+            return state.normalized
+        return [_normalized_from_raw(d) for d in state.raw]
 
     def transform(self, docs: list, ctx: RunContext) -> list[ExtractionResult]:
         llm = ctx.llm
