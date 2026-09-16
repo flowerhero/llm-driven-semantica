@@ -7,7 +7,7 @@ name = "smini"
 version = "0.1.0"
 description = "LLM-driven knowledge-graph pipeline: Skill-First, contract-as-rules extraction (entities/relations/attributes/rules/processes + predictive-decision six-pack)"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [{ name = "The semantica-simple contributors" }]
 keywords = ["knowledge-graph", "rag", "semantica", "workbuddy", "skill", "llm"]
@@ -15,7 +15,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",

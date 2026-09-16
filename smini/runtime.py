@@ -121,7 +121,9 @@ def _revive_field(tp: Any, data: Any) -> Any:
     args = typing.get_args(tp)
 
     # X | None
-    if origin is _pytypes.UnionType or (args and type(None) in args):
+    # 防御：types.UnionType 仅 Python 3.10+ 存在；3.9 下 getattr 返回空元组，
+    # origin 永不等于它，分支退化为仅靠 `type(None) in args` 判断（兼容 Optional）。
+    if origin is getattr(_pytypes, "UnionType", ()) or (args and type(None) in args):
         inner = [a for a in args if a is not type(None)]
         if len(inner) == 1:
             return _revive_field(inner[0], data)

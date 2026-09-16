@@ -16,6 +16,10 @@
     # 导出 JSON（整条 state，便于审计/复现）
     python -m smini.cli build "text://..." --json out.json
 
+    # 只落盘抽取结果（04-extraction.json 单篇契约，可直接进 ids/validate）
+    python -m smini.cli build "file:///path/to/doc.md" --host-contract contract.json \\
+        --extract-out runs/<run_id>/04-extraction.json
+
 退出码：0 成功，1 流水线失败，2 参数错误。
 """
 
@@ -46,6 +50,9 @@ def _build(argv: Sequence[str]) -> int:
     p.add_argument("--stop", default=None, help="只跑到该步（含），如 extract")
     p.add_argument("--seed", type=int, default=0, help="随机种子（注入 ctx）")
     p.add_argument("--json", default=None, help="把整条 state 导出为 JSON 文件")
+    p.add_argument("--extract-out", default=None,
+                   help="把抽取结果落盘为 04-extraction.json（单篇 ExtractionResult 契约；"
+                        "多篇文档时仅导出第一篇，其余请用 --json 导出 state）")
     p.add_argument("--sample", action="store_true", help="使用内置样例文本")
     p.add_argument("--host-contract", default=None,
                    help="宿主 agent（豆包）充当 LLM：宿主按契约产出的抽取 JSON 路径"
@@ -95,6 +102,19 @@ def _build(argv: Sequence[str]) -> int:
         if s.by_type:
             top = sorted(s.by_type.items(), key=lambda kv: kv[1], reverse=True)[:6]
             print("  类型分布:", ", ".join(f"{k}={v}" for k, v in top))
+
+    if args.extract_out:
+        exs = state.extractions
+        if not exs:
+            print("[extract-out] 无抽取结果可导出（宿主未交卷 --host-contract 时抽取为空）",
+                  file=sys.stderr)
+        else:
+            if len(exs) > 1:
+                print(f"[extract-out] 警告：共 {len(exs)} 篇文档，仅导出第一篇 → {args.extract_out}",
+                      file=sys.stderr)
+            with open(args.extract_out, "w", encoding="utf-8") as f:
+                json.dump(to_dict(exs[0]), f, ensure_ascii=False, indent=2, default=str)
+            print(f"\n[extract-out] 已导出抽取结果 → {args.extract_out}")
 
     if args.json:
         with open(args.json, "w", encoding="utf-8") as f:

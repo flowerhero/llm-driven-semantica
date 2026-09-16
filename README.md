@@ -35,6 +35,9 @@ KnowledgeGraph + HTML 查看器（scripts/render_viewer.py）
 ## 快速开始
 
 ```bash
+# 0. 环境：Python ≥ 3.10（代码使用 `X | None` 注解与 `types.UnionType`，3.9 不支持）；
+#    推荐 Python 3.12 —— `uv run --python 3.12 -m smini.cli …`（uv 会自动匹配）
+
 # 1. 安装（可编辑模式）
 pip install -e .
 
@@ -45,7 +48,7 @@ python -m unittest discover -s tests
 python -m smini.cli build --sample
 
 # 4. 宿主 agent 充当 LLM：按契约交卷后抽取
-python -m smini.cli build --sample --host-contract contract.json
+python -m smini.cli build --sample --host-contract contract.json --extract-out runs/<run_id>/04-extraction.json
 ```
 
 ### 在宿主 agent 中使用（主体路径）

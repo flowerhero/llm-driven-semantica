@@ -14,6 +14,14 @@ description: "从归一化文档中抽取本体（ontology）所需的实体-关
 > 只要求按约定格式交卷。正确性锚点惰性化到消费层（`smini/steps/build_kg.py`）。
 > Python 不再自调任何模型 API、不再读 `SMINI_LLM_*` 环境变量。
 >
+>
+## 运行时要求（Python 版本）
+
+- **Python ≥ 3.10**（代码使用 `X | None` 注解与 `types.UnionType`，3.9 不支持）。
+  推荐 **Python 3.12**：`uv run --python 3.12 -m smini.cli …`（uv 会自动匹配；
+  若本地无 3.12 解释器，先 `uv python install 3.12` 或改用本机 ≥3.10 的解释器）。
+- 全项目零第三方依赖，`python -m smini.cli …` 直接可跑（无需 pip install）。
+
 
 ## 契约（唯一约定，写进提示词）
 
@@ -192,7 +200,8 @@ permissions: [{ actor, action, effect, scope?, role?, actor_type?, evidence }]
 
 宿主交卷方式二选一：
 - **库调用**：`HostAgentLLMProvider().inject(contract)` → `ExtractStep`
-- **CLI**：`python -m smini.cli build <src> --host-contract <contract.json>`
+- **CLI**：`python -m smini.cli build <src> --host-contract <contract.json> --extract-out runs/<run_id>/04-extraction.json`
+  （`--extract-out` 把抽取结果落盘为单篇 `04-extraction.json`；多篇文档时仅导出第一篇，其余用 `--json state.json` 导出后取 `extractions[]`）
 
 > 契约模板：`references/host-contract.example.json`（基于真实监管文本的完整示例，
 > 含五件套，完全符合 A 清单）。宿主产出契约后，用该模板对照检查结构即可。
@@ -231,6 +240,12 @@ permissions: [{ actor, action, effect, scope?, role?, actor_type?, evidence }]
     `actions[].precondition/postcondition`、`permissions[].role/actor_type`、
     `attributes[].required`（bool 化）；`document_meta.source` 强制取输入 URI
 - 写 `runs/<run_id>/04-extraction.json`，遵循 `contracts/extraction.schema.json`。
+  **落盘主体（两条路径，任选其一）**：
+  - **库调用路径**：宿主 `inject(contract)` 后由**宿主 agent 自己写文件**（薄壳 `ExtractStep`
+    已在内存产出 `ExtractionResult`，宿主 `to_dict` 后落盘）；
+  - **CLI 路径**：`build … --extract-out runs/<run_id>/04-extraction.json` 由 CLI 落盘
+    （与第 2 步的 CLI 交卷方式配套）；也可用 `--json state.json` 导出后手动取
+    `extractions[0]`。
 
 ### 4. 调 Python 校验（可选）
 
