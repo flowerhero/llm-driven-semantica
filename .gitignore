@@ -4,7 +4,6 @@ outputs/
 
 # ===== 外部/参考目录（非本项目核心，单独归档）=====
 others/
-ontology-driven-dev-main/
 
 # ===== 工作区元数据 =====
 .workbuddy/
@@ -35,8 +34,6 @@ build/
 # 非核心：留空待用的 agent 定义目录
 agents/
 
-# ===== 发布排除：内部文档 / 私有素材 / 二进制 =====
+# ===== 发布排除：内部文档 / 私有素材 / 备份 =====
 docs/memory/
 smini-extract.backup-*/
-tests/fixtures/新核心系统（理赔系统）需求规格说明书V2.1_签收版.md
-tests/fixtures/证券公司关键岗位能力素质模型系列（投资顾问类）.pdf
