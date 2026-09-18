@@ -1,12 +1,12 @@
 # llm-driven-semantica
 
-基于 [semantica](https://github.com/sharptoolbox/semantica) 知识图谱流水线的**精简实现**，采用 **「契约即规则」（Rule-by-Contract）** 架构：
+基于 [semantica]知识图谱理念的**精简实现**，采用 **「契约即规则」（Rule-by-Contract）** 架构：
 
 > 语义抽取（实体-关系三元组、属性、业务规则、业务流程、预测决策六件套、时态/动作/约束/授权）由**宿主 agent（大模型）**承担——宿主只须按约定 JSON 契约交卷（十一件套）；
 > Python 只保留**确定性薄壳**——内容寻址 ID、Schema 校验、枚举兜底、惰性锚点、双时态知识图谱。
 > **零规则抽取**：不配置任何 `SMINI_LLM_*` 环境变量、不发起模型 HTTP 调用、无确定性 Python 抽取规则。
 
-规则设计逐条**溯源到上游 semantica 源码**（见 `docs/semantica-8步流水线源码解析.md` 与 `skills/smini-extract/references/extraction-rules.md`）。
+抽取结果质量高度依赖所调用模型的能力，建议使用SOTA模型执行本skill。
 
 ---
 
@@ -34,6 +34,13 @@ KnowledgeGraph + HTML 查看器（scripts/render_viewer.py）
 
 ## 快速开始
 
+### 在宿主 agent 中使用（主体路径）
+
+宿主 agent（Claude、WorkBuddy等具备大模型能力的 agent）按 `skills/smini-extract/SKILL.md` 的契约直接交卷即可，例如：
+“调用smini-extract skill抽取 /path/to/doc”
+**无需配置任何模型 API 凭证**：
+宿主读文档 → 产出 `{entities, relations, attributes, rules, processes, ...}` 十一件套 JSON → Python 薄壳确定性映射 → 建图 + 渲染 HTML。
+
 ```bash
 # 0. 环境：Python ≥ 3.10（代码使用 `X | None` 注解与 `types.UnionType`，3.9 不支持）；
 #    推荐 Python 3.12 —— `uv run --python 3.12 -m smini.cli …`（uv 会自动匹配）
@@ -50,12 +57,6 @@ python -m smini.cli build --sample
 # 4. 宿主 agent 充当 LLM：按契约交卷后抽取
 python -m smini.cli build --sample --host-contract contract.json --extract-out runs/<run_id>/04-extraction.json
 ```
-
-### 在宿主 agent 中使用（主体路径）
-
-宿主 agent（豆包等具备大模型能力的 agent）按 `skills/smini-extract/SKILL.md` 的契约直接交卷即可，**无需配置任何模型 API 凭证**：
-宿主读文档 → 产出 `{entities, relations, attributes, rules, processes, ...}` 十一件套 JSON →
-通过 `--host-contract` 或 `HostAgentLLMProvider.inject()` 注入 → Python 薄壳确定性映射 → 建图 + 渲染 HTML。
 
 ## 项目结构
 
