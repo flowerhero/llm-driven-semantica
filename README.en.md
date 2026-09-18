@@ -80,4 +80,4 @@ docs/                  # design documents + source analysis
 
 ## License
 
-Apache-2.0 (`LICENSE` / `NOTICE`). Ontology extraction rules are derived from the MIT-licensed [semantica](https://github.com/sharptoolbox/semantica).
+Apache-2.0 (`LICENSE` / `NOTICE`). Ontology extraction rules are partially derived from the MIT-licensed [semantica](https://github.com/sharptoolbox/semantica).

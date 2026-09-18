@@ -78,4 +78,4 @@ docs/                  # 设计文档 + 源码解析
 
 ## 许可
 
-Apache-2.0（`LICENSE` / `NOTICE`）。本体抽取规则溯源自 MIT 许可的 [semantica](https://github.com/sharptoolbox/semantica)。
+Apache-2.0（`LICENSE` / `NOTICE`）。本体抽取规则部分溯源自 MIT 许可的 [semantica](https://github.com/sharptoolbox/semantica)。
