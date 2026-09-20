@@ -48,11 +48,13 @@ from ..types import (
     Action,
     ActionLevel,
     ActorType,
+    ApprovalOutcome,
     AttributeValueType,
     Certainty,
     Chunk,
     Constraint,
     ConstraintType,
+    DataScope,
     Degradation,
     DegradationKind,
     DependencyMissing,
@@ -67,6 +69,7 @@ from ..types import (
     PermissionEffect,
     Process,
     ProcessFlow,
+    ProcessFlowType,
     ProcessStep,
     Provenance,
     Relation,
@@ -561,6 +564,23 @@ class ExtractStep(PipelineStep[list, list[ExtractionResult]]):
                 actor = (st.get("actor") or "").strip()
                 # v7：子流程引用（M6 SUB_FLOW_CALL）——引用另一流程 name，可空
                 sub_ref = (st.get("sub_process_ref") or "").strip()
+                # 2026-09-20 借鉴（v9 M6 审批流增强）：泳道（软引用）+
+                # 驳回目标（整数下标，越界丢弃）+ 审批结果三态（枚举校验）
+                lane = (st.get("lane") or "").strip()
+                reject_to: int | None = None
+                try:
+                    raw_rt = st.get("reject_to")
+                    if raw_rt is not None and str(raw_rt).strip() != "":
+                        reject_to = int(raw_rt)
+                        if reject_to < 0 or reject_to >= len(raw_steps):
+                            reject_to = None
+                except (TypeError, ValueError):
+                    reject_to = None
+                raw_ao = (st.get("approval_outcome") or "").strip()
+                try:
+                    ao = ApprovalOutcome(raw_ao) if raw_ao else ApprovalOutcome.OTHER
+                except ValueError:
+                    ao = ApprovalOutcome.OTHER
                 evidence = (st.get("evidence") or "").strip() or None
                 ev_span = _locate_span(nd.text, evidence) if evidence else (-1, -1)
                 ev_span_t = (ev_span[0], ev_span[1]) if ev_span[0] >= 0 else None
@@ -571,6 +591,7 @@ class ExtractStep(PipelineStep[list, list[ExtractionResult]]):
                     label=label, kind=kind, actor=actor, evidence_span=ev_span_t,
                     evidence_text=evidence, extractor="llm.proc.v1",
                     confidence=0.8, provenance=prov, sub_process_ref=sub_ref,
+                    lane=lane, reject_to=reject_to, approval_outcome=ao,
                 ))
 
             flows: list[ProcessFlow] = []
@@ -590,6 +611,9 @@ class ExtractStep(PipelineStep[list, list[ExtractionResult]]):
                 except ValueError:
                     ft = FlowType.SEQUENCE
                 condition = (f.get("condition") or "").strip()
+                # 2026-09-20 借鉴（v9 M6）：驳回边条件（自然语言补充，可空；
+                # 与步骤级 reject_to 并存时以步骤级为权威）
+                on_reject = (f.get("on_reject") or "").strip()
                 evidence = (f.get("evidence") or "").strip() or None
                 ev_span = _locate_span(nd.text, evidence) if evidence else (-1, -1)
                 ev_span_t = (ev_span[0], ev_span[1]) if ev_span[0] >= 0 else None
@@ -600,6 +624,7 @@ class ExtractStep(PipelineStep[list, list[ExtractionResult]]):
                     from_index=fi, to_index=ti, type=ft, condition=condition,
                     evidence_span=ev_span_t, evidence_text=evidence,
                     extractor="llm.proc.v1", confidence=0.8, provenance=prov,
+                    on_reject=on_reject,
                 ))
 
             if not steps:
@@ -612,12 +637,21 @@ class ExtractStep(PipelineStep[list, list[ExtractionResult]]):
                     return [str(x).strip() for x in v if str(x).strip()]
                 s = str(v or "").strip()
                 return [s] if s else []
+            # 2026-09-20 借鉴（v9 M6 flowType/审批链）：流程类型（协同流/审批流，
+            # 非法→COLLABORATION）+ 审批链路摘要（角色/岗位名数组，可空）
+            raw_ft2 = (p.get("flow_type") or "").strip()
+            try:
+                ftype = ProcessFlowType(raw_ft2) if raw_ft2 else ProcessFlowType.COLLABORATION
+            except ValueError:
+                ftype = ProcessFlowType.COLLABORATION
+            approval_chain = _str_list(p.get("approval_chain"))
             out.append(Process(
                 process_id=pid, doc_id=nd.doc_id, name=name, steps=steps, flows=flows,
                 description=description, extractor="llm.proc.v1", confidence=0.8,
                 provenance=prov,
                 preconditions=_str_list(p.get("preconditions")),
                 postconditions=_str_list(p.get("postconditions")),
+                flow_type=ftype, approval_chain=approval_chain,
             ))
         return out
 
@@ -862,6 +896,13 @@ class ExtractStep(PipelineStep[list, list[ExtractionResult]]):
                 atype = ActorType(raw_at) if raw_at else ActorType.OTHER
             except ValueError:
                 atype = ActorType.OTHER
+            # 2026-09-20 借鉴（v9 M5 Permission.dataScope）：数据可见范围
+            # （ALL/OWN/DEPT/CUSTOM，非法 → OTHER 兜底；不参与寻址）
+            raw_ds = (p.get("data_scope") or "").strip()
+            try:
+                dscope = DataScope(raw_ds) if raw_ds else DataScope.OTHER
+            except ValueError:
+                dscope = DataScope.OTHER
             evidence = (p.get("evidence") or "").strip() or None
             ev_span = _locate_span(nd.text, evidence) if evidence else (-1, -1)
             ev_span_t = (ev_span[0], ev_span[1]) if ev_span[0] >= 0 else None
@@ -873,6 +914,7 @@ class ExtractStep(PipelineStep[list, list[ExtractionResult]]):
                 effect=effect, scope=scope, evidence_span=ev_span_t,
                 evidence_text=evidence, extractor="llm.pm.v1",
                 confidence=0.85, provenance=prov, role=role, actor_type=atype,
+                data_scope=dscope,
             ))
         return out
 

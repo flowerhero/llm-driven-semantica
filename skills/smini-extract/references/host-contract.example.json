@@ -261,6 +261,8 @@
     {
       "name": "投资者适当性管理流程",
       "description": "从了解客户到回访的完整适当性管理流程",
+      "flow_type": "COLLABORATION",
+      "approval_chain": [],
       "steps": [
         {
           "label": "流程开始",
@@ -360,6 +362,98 @@
       ],
       "postconditions": [
         "适当性匹配结果已留档并告知投资者"
+      ]
+    },
+    {
+      "name": "投资者类别转化审批流程",
+      "description": "普通投资者申请转化成为专业投资者的审批流程",
+      "flow_type": "APPROVAL",
+      "approval_chain": [
+        "适当性管理岗",
+        "合规审核岗"
+      ],
+      "steps": [
+        {
+          "label": "流程开始",
+          "kind": "START",
+          "actor": "",
+          "evidence": "",
+          "sub_process_ref": "",
+          "lane": ""
+        },
+        {
+          "label": "提交转化申请",
+          "kind": "TASK",
+          "actor": "普通投资者",
+          "evidence": "普通投资者申请转化成为专业投资者",
+          "sub_process_ref": "",
+          "lane": "投资者"
+        },
+        {
+          "label": "适当性管理岗初审",
+          "kind": "TASK",
+          "actor": "证券经营机构",
+          "evidence": "对普通投资者申请转化进行审慎评估",
+          "sub_process_ref": "",
+          "lane": "适当性管理岗",
+          "approval_outcome": "APPROVE",
+          "reject_to": null
+        },
+        {
+          "label": "合规审核岗复核",
+          "kind": "TASK",
+          "actor": "证券经营机构",
+          "evidence": "书面告知审查结果和理由",
+          "sub_process_ref": "",
+          "lane": "合规审核岗",
+          "approval_outcome": "RETURN",
+          "reject_to": 1
+        },
+        {
+          "label": "流程结束",
+          "kind": "END",
+          "actor": "",
+          "evidence": "",
+          "sub_process_ref": "",
+          "lane": ""
+        }
+      ],
+      "flows": [
+        {
+          "from": 0,
+          "to": 1,
+          "type": "SEQUENCE",
+          "condition": "",
+          "evidence": ""
+        },
+        {
+          "from": 1,
+          "to": 2,
+          "type": "SEQUENCE",
+          "condition": "",
+          "evidence": ""
+        },
+        {
+          "from": 2,
+          "to": 3,
+          "type": "SEQUENCE",
+          "condition": "初审通过",
+          "evidence": ""
+        },
+        {
+          "from": 3,
+          "to": 1,
+          "type": "CONDITIONAL",
+          "condition": "复核退回修改",
+          "on_reject": "退回重新提交申请",
+          "evidence": "退回修改后重新提交"
+        }
+      ],
+      "preconditions": [
+        "普通投资者已提交完整申请材料"
+      ],
+      "postconditions": [
+        "审查结果和理由已书面告知投资者"
       ]
     }
   ],
@@ -524,7 +618,8 @@
       "scope": "符合《办法》第八条第（一）（二）（三）项或第十二条规定",
       "evidence": "普通投资者申请转化成为专业投资者的",
       "role": "适当性管理岗",
-      "actor_type": "HUMAN"
+      "actor_type": "HUMAN",
+      "data_scope": "OWN"
     },
     {
       "actor": "专业投资者",
@@ -533,7 +628,8 @@
       "scope": "法律、行政法规、中国证监会规定及市场准入有要求的从其规定",
       "evidence": "专业投资者可以购买或接受所有风险等级的产品或服务",
       "role": "适当性管理岗",
-      "actor_type": "HUMAN"
+      "actor_type": "HUMAN",
+      "data_scope": "ALL"
     }
   ],
   "document_meta": {

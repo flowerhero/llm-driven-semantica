@@ -33,13 +33,13 @@ entities:    [{ surface, canonical, type }]
 relations:   [{ subject, predicate, object, object_type, evidence, prop_kind?, strength? }]
 attributes:  [{ entity, name, value, value_type, evidence, required?, }]
 rules:       [{ subject, condition, action, modality, evidence, rule_type?, output_type?, reused_by?, certainty? }]
-processes:   [{ name, description, steps, flows, preconditions?, postconditions? }]
+processes:   [{ name, description, flow_type?, approval_chain?, steps, flows, preconditions?, postconditions? }]
 states:      [{ object, name?, states:[{label, initial?}], transitions:[{from, to, event?, condition?, action?}] }]
 functions:   [{ name, subject?, formula, inputs?, output_type, evidence }]
 temporal:    [{ subject, kind, value, anchor?, evidence }]
 actions:     [{ name, actor?, level, target?, side_effect?, trigger?, precondition?, postcondition?, evidence }]
 constraints: [{ subject, type, description, evidence }]
-permissions: [{ actor, action, effect, scope?, role?, actor_type?, evidence }]
+permissions: [{ actor, action, effect, scope?, role?, actor_type?, data_scope?, evidence }]
 ```
 
 | 字段 | 含义 | 约束 |
@@ -63,11 +63,16 @@ permissions: [{ actor, action, effect, scope?, role?, actor_type?, evidence }]
 | `reused_by`（rules，可选） | 本规则被哪些流程/函数引用 | 字符串数组，引用流程/函数的 `name`；找不到只软警告不阻断 |
 | `certainty`（rules，可选） | 内容确定性分级 | `GENERAL`（行业通用）/`ENTERPRISE`（企业专属参数，需人工复核）/`OTHER`；判不出用 `OTHER` |
 | `name`（processes） | 流程名 | 短名，如「投资者适当性管理流程」（内容寻址锚） |
-| `steps`（processes） | 按执行顺序的步骤列表 | 每步 `label`（做什么，**必有**）+ `kind`（独立 6 类枚举）+ `actor`（执行者，用实体 canonical，**可空**）+ `sub_process_ref?`（子流程引用，v7）+ `evidence` |
+| `flow_type`（processes，可选） | 流程类型，独立 2 类枚举 | `COLLABORATION APPROVAL`；含审批/审核/复核/会签步骤 → `APPROVAL`；判不出用 `COLLABORATION` |
+| `approval_chain`（processes，可选） | 审批链路摘要 | 角色/岗位名数组（如 `["初审岗","复核岗"]`）；多级审批以 steps 顺序为准，可空 |
+| `steps`（processes） | 按执行顺序的步骤列表 | 每步 `label`（做什么，**必有**）+ `kind`（独立 6 类枚举）+ `actor`（执行者，用实体 canonical，**可空**）+ `sub_process_ref?`（子流程引用，v7）+ `lane?`/`reject_to?`/`approval_outcome?`（审批流增强，2026-09-20）+ `evidence` |
 | `kind`（steps） | 步骤类型，独立 6 类枚举 | `TASK GATEWAY EVENT START END SYSTEM_TASK`；判不出用 `TASK`，不自创类型 |
 | `sub_process_ref`（steps，可选） | 子流程引用 | 引用另一流程的 `name`（对齐 M6 SUB_FLOW_CALL）；仅软校验存在性，不展开执行 |
+| `lane`（steps，可选） | 泳道 | 步骤所属角色/部门（软引用，如「风控审核岗」），可空 |
+| `approval_outcome`（steps，可选） | 审批结果，独立 4 类枚举 | `APPROVE REJECT RETURN OTHER`；通过/否决（流程终止）/退回（配合 reject_to）/判不出 `OTHER`；仅审批类步骤用 |
+| `reject_to`（steps，可选） | 驳回目标 | **整数下标**引用 steps；仅 `RETURN` 时填（回到修改/补正步骤）；越界由薄壳丢弃 |
 | `preconditions` / `postconditions`（processes，可选） | 流程级前后置条件 | 字符串数组，自然语言表达（进入流程前必须成立 / 结束后必然成立） |
-| `flows`（processes） | 控制流列表 | 每流 `from`/`to`（**整数下标**引用 steps）+ `type`（独立 4 类枚举）+ `condition`（仅分支用）+ `evidence` |
+| `flows`（processes） | 控制流列表 | 每流 `from`/`to`（**整数下标**引用 steps）+ `type`（独立 4 类枚举）+ `condition`（仅分支用）+ `on_reject?`（驳回边条件）+ `evidence` |
 | `type`（flows） | 控制流类型，独立 4 类枚举 | `SEQUENCE PARALLEL CONDITIONAL LOOP`；判不出用 `SEQUENCE`，不自创类型 |
 | `prop_kind`（relations，可选） | 关系传导类型，独立 4 类枚举 | `FACTUAL DEPENDENCY CAUSAL TRIGGER`；普通事实省略即 `FACTUAL`，不自创类型 |
 | `strength`（relations，可选） | 传导强度 | 如 `HIGH MEDIUM LOW`；判不出省略 |
@@ -92,6 +97,7 @@ permissions: [{ actor, action, effect, scope?, role?, actor_type?, evidence }]
 | `scope`（permissions） | 授权范围 | 可空 |
 | `role`（permissions，可选） | 角色中间层 | 权限经角色授予（RBAC 双层，对齐 M5 roles）；用角色名，可空 |
 | `actor_type`（permissions，可选） | 主体类型，独立 3 类枚举 | `HUMAN SYSTEM OTHER`；人工/系统自动；判不出用 `OTHER`，不自创类型 |
+| `data_scope`（permissions，可选） | 数据可见范围，独立 5 类枚举 | `ALL OWN DEPT CUSTOM OTHER`；全机构/本人/本部门/自定义；判不出用 `OTHER`，不自创类型 |
 
 > **实体 vs 属性唯一硬分界**（写进提示词）：
 > 宾语是独立实体（可单独成节点）→ `relations`；宾语是字面量（日期、金额、
@@ -112,6 +118,15 @@ permissions: [{ actor, action, effect, scope?, role?, actor_type?, evidence }]
 > （rules）不因流程抽取而重复——**五件套并行不互斥**（同一句可同时是
 > 关系与流程步骤）。steps 的 `kind` 判不出用 `TASK`；flows 的 `type` 判不出
 > 用 `SEQUENCE`；from/to 用整数下标引用 steps，不要自造 ID。
+> 含**审批/审核/复核/会签/批准**步骤的流程 → `flow_type="APPROVAL"`；
+> 审批步骤的结果（通过/否决/退回）标 `approval_outcome`，退回（RETURN）
+> 必须给 `reject_to` 指向被退回修改的步骤下标。
+>
+> **规则四层分级**（写进提示词，无代码规则）：
+> 规则按生效位置**逐层下沉**，能下沉就不堆进 `rules[]`：L1 单属性取值约束
+> → `attributes[].required`/`value_type`；L2 实体间引用/关联约束 →
+> `relations[]`；L3 跨属性不变量/整体一致性 → `constraints[]`；L4 道义动词
+> 或条件-动作结构且不属于 L1-L3 → `rules[]`（完整条件-动作+模态）。
 >
 > **预测决策六件套判定原则**（写进提示词，无代码规则）：
 > - **states**：对象存在**离散状态**（如风险承受能力等级 C1-C5、投资者类别
@@ -151,6 +166,8 @@ permissions: [{ actor, action, effect, scope?, role?, actor_type?, evidence }]
 | 规则入图 | **不入实体-边图**；仅 `metadata.rule_count` 登记 | `build_kg.py` |
 | process_id / step_id / flow_id | 由 `name` / `(process, index, label)` / `(process, from, to, type, condition)` 内容寻址，跨进程幂等 | `smini/ids.py` |
 | kind / flow.type | 步骤类型 / 控制流类型：薄壳校验，非法 → `TASK` / `SEQUENCE` 兜底 | 薄壳 |
+| flow_type / approval_outcome | 流程类型 / 审批结果：薄壳校验，非法 → `COLLABORATION` / `OTHER` 兜底 | 薄壳 |
+| reject_to | 驳回目标：下标越界（<0 或 ≥len(steps)）→ **置 None**（同 flow 下标处理） | 薄壳 |
 | flow 下标 | from/to 越界（<0 或 ≥len(steps)）→ **丢弃该 flow**（LLM 下标不可信） | 薄壳 |
 | 流程入图 | **不入实体-边图**；仅 `metadata.process_count` 登记 | `build_kg.py` |
 | state_machine_id | `sha256(object, name)` 内容寻址，跨进程幂等 | `smini/ids.py` |
@@ -166,6 +183,7 @@ permissions: [{ actor, action, effect, scope?, role?, actor_type?, evidence }]
 | type（constraints） | 约束类型：薄壳校验，非法 → `CONSISTENCY` 兜底 | 薄壳 |
 | permission_id | `sha256(actor, action, effect)` 内容寻址 | `smini/ids.py` |
 | effect | 授权效果：薄壳校验，非法 → `DENY` 兜底（最小权限） | 薄壳 |
+| data_scope | 数据可见范围：薄壳校验，非法 → `OTHER` 兜底；不参与寻址 | 薄壳 |
 | prop_kind / strength | 关系传导：薄壳校验，非法/缺失 → 空（普通事实 FACTUAL） | 薄壳 |
 | rule_type / certainty / actor_type | 规则用途 / 确定性 / 主体类型：薄壳校验，非法 → `OTHER` 兜底 | 薄壳 |
 | output_type（rules） | 规则输出形态：薄壳校验，非法 → `OTHER`；空 → 空串（未标注，schema 允许） | 薄壳 |
@@ -236,8 +254,10 @@ permissions: [{ actor, action, effect, scope?, role?, actor_type?, evidence }]
     非法/缺失 → 空 = 普通事实 FACTUAL）
   - 字段透传（薄壳校验 + 非法兜底，不参与 ID 寻址）：
     `rules[].rule_type/output_type/reused_by/certainty`、
-    `processes[].preconditions/postconditions`、`steps[].sub_process_ref`、
-    `actions[].precondition/postcondition`、`permissions[].role/actor_type`、
+    `processes[].preconditions/postconditions/flow_type/approval_chain`、
+    `steps[].sub_process_ref/lane/reject_to/approval_outcome`、
+    `flows[].on_reject`、
+    `actions[].precondition/postcondition`、`permissions[].role/actor_type/data_scope`、
     `attributes[].required`（bool 化）；`document_meta.source` 强制取输入 URI
 - 写 `runs/<run_id>/04-extraction.json`，遵循 `contracts/extraction.schema.json`。
   **落盘主体（两条路径，任选其一）**：
@@ -320,11 +340,13 @@ python <skill>/scripts/render_viewer.py --in <contract.json> --out <contract.htm
 - [ ] 每个 attribute 的 `value_type` 都在 10 类独立枚举内（`DATE TIME MONEY PERCENT QUANTITY NUMBER BOOLEAN ENUM STRING OTHER`）；判不出用 `OTHER`，不自创类型
 - [ ] **实体 vs 属性分界正确**：宾语是独立实体 → relations；宾语是字面量 → attributes（唯一硬分界）
 - [ ] **规则判定正确**：含道义动词（应当/必须/不得/禁止/可以/有权）或条件-动作结构（如果/当…时…则…）→ rules；纯事实陈述 → 保持 relations/attributes，不进 rules
+- [ ] **规则四层分级正确**：单属性取值约束 → `attributes.required`/`value_type`；实体间引用约束 → `relations`；跨属性不变量 → `constraints`；仅 L4 道义/条件-动作 → `rules`（能下沉不堆进 rules[]，防规则集膨胀）
 - [ ] 每条 rule 的 `action` 必有；`modality` 在 5 类独立枚举内（`OBLIGATION PROHIBITION PERMISSION CONDITIONAL OTHER`）；判不出用 `OTHER`，不自创类型
 - [ ] **不抽非规则段落**：定义、标题、序言、交叉引用表等不进 rules（防规则集膨胀）
-- [ ] **流程判定正确**：含顺序/阶段/流程性描述（先/再/然后/最后、流程/步骤/生命周期）→ processes；纯事实（relations/attributes）与纯规范（rules）不因流程抽取而重复（五件套并行不互斥）
-- [ ] 每个 process 的 `steps` 有 `label`（做什么）；`kind` 在 3 类独立枚举内（`TASK GATEWAY EVENT`），判不出用 `TASK`，不自创类型
+- [ ] **流程判定正确**：含顺序/阶段/流程性描述（先/再/然后/最后、流程/步骤/生命周期）→ processes；纯事实（relations/attributes）与纯规范（rules）不因流程抽取而重复（五件套并行不互斥）；含审批/审核/复核/会签步骤 → `flow_type="APPROVAL"`
+- [ ] 每个 process 的 `steps` 有 `label`（做什么）；`kind` 在 6 类独立枚举内（`TASK GATEWAY EVENT START END SYSTEM_TASK`），判不出用 `TASK`，不自创类型
 - [ ] 每个 flow 的 `from`/`to` 是 steps 数组整数下标（0-based）；`type` 在 4 类独立枚举内（`SEQUENCE PARALLEL CONDITIONAL LOOP`），判不出用 `SEQUENCE`，不自创类型；CONDITIONAL 分支带 `condition`
+- [ ] **审批流增强字段（可选，给出即正确）**：`approval_outcome` 在 4 类枚举内（`APPROVE REJECT RETURN OTHER`）；`RETURN` 必有 `reject_to`（整数下标）；`REJECT` 通常无 `reject_to`；`lane`/`approval_chain`/`on_reject` 用自然语言/名称，不编造
 - [ ] **状态机判定正确**：对象有离散状态且存在迁移（评估变化/申请转化）→ states；与 processes 分界（执行步骤序列 vs 生命周期拓扑）正确
 - [ ] 每个 state 有 `label`；`initial` 标记初始态；每个 transition 的 `from`/`to` 是 states 数组整数下标（0-based）；`event`/`condition`/`action` 全可空
 - [ ] **函数指标判定正确**：可量化经验/阈值/定义式 → functions；与 attributes 分界（字面量值 vs 计算定义）正确；`formula` 用声明式自然语言/运算符描述，不强制可执行数学表达式
@@ -336,9 +358,9 @@ python <skill>/scripts/render_viewer.py --in <contract.json> --out <contract.htm
 - [ ] **约束判定正确**：结构约束（至少划分为五级/不低于/应当包含/不得并存）→ constraints；与 rules 分界（该做什么 vs 什么合法）正确
 - [ ] 每个 constraint 的 `type` 在 6 类独立枚举内（`CARDINALITY VALUE_RANGE ENUM DISJOINT REQUIRED CONSISTENCY`）；判不出用 `CONSISTENCY`，不自创类型
 - [ ] **授权判定正确**：谁能/不能执行什么动作 → permissions；与 rules 的 PERMISSION 模态分界（actor-action-effect+范围 vs 完整条件-动作结构）正确
-- [ ] 每个 permission 的 `effect` 在 2 类独立枚举内（`PERMIT DENY`）；判不出用 `DENY`（最小权限），不自创类型
+- [ ] 每个 permission 的 `effect` 在 2 类独立枚举内（`PERMIT DENY`）；判不出用 `DENY`（最小权限），不自创类型；`data_scope` 在 5 类枚举内（`ALL OWN DEPT CUSTOM OTHER`），判不出用 `OTHER`
 - [ ] relations 的 `prop_kind` 在 4 类独立枚举内（`FACTUAL DEPENDENCY CAUSAL TRIGGER`）；普通事实省略即 FACTUAL，不自创类型
-- [ ] **借鉴字段（可选，给出即正确）**：rules 的 `rule_type` 在 4 类枚举内（`VALIDATION DERIVATION TRIGGER OTHER`）、`certainty` 在 3 类枚举内（`GENERAL ENTERPRISE OTHER`）、`output_type` 复用函数输出 7 类枚举（判不出省略）、`reused_by` 是字符串数组；attributes 的 `required` 是布尔；steps 的 `kind` 可用 `START/END/SYSTEM_TASK`；permissions 的 `actor_type` 在 3 类枚举内（`HUMAN SYSTEM OTHER`）；流程步骤的 `sub_process_ref`、流程 `preconditions/postconditions`、动作 `precondition/postcondition`、授权 `role` 均用自然语言/名称，不编造
+- [ ] **借鉴字段（可选，给出即正确）**：rules 的 `rule_type` 在 4 类枚举内（`VALIDATION DERIVATION TRIGGER OTHER`）、`certainty` 在 3 类枚举内（`GENERAL ENTERPRISE OTHER`）、`output_type` 复用函数输出 7 类枚举（判不出省略）、`reused_by` 是字符串数组；attributes 的 `required` 是布尔；steps 的 `kind` 可用 `START/END/SYSTEM_TASK`；permissions 的 `actor_type` 在 3 类枚举内（`HUMAN SYSTEM OTHER`）、`data_scope` 在 5 类枚举内（`ALL OWN DEPT CUSTOM OTHER`）；流程 `flow_type` 在 2 类枚举内（`COLLABORATION APPROVAL`）、步骤 `approval_outcome` 在 4 类枚举内（`APPROVE REJECT RETURN OTHER`，RETURN 必有 `reject_to`）；流程步骤的 `sub_process_ref`/`lane`、流程 `preconditions/postconditions`/`approval_chain`、流 `on_reject`、动作 `precondition/postcondition`、授权 `role` 均用自然语言/名称，不编造
 - [ ] **document_meta（可选）**：`source` 由 Python 强制取输入文档 URI，宿主只需给 `domain/version/doc_type`
 - [ ] 六件套均**不入实体-边图**；不输出偏移 / ID / `object_literal`（由 Python 惰性锚点补算）
 - [ ] 实体是专有名词性成分，不抽句子片段或指代词（如「该公司」）
@@ -354,16 +376,16 @@ python <skill>/scripts/render_viewer.py --in <contract.json> --out <contract.htm
 - [ ] 属性三元组：`object_literal=True`、`value_type` 在 10 类枚举内（非法已兜底 `OTHER`）、`extractor="llm.attr.v1"`、`triplet_id` 已补算
 - [ ] 规则：`modality` 在 5 类枚举内（非法已兜底 `OTHER`）、`extractor="llm.rule.v1"`、`rule_id` 已补算、action 必有
 - [ ] 规则未进入实体-边图谱（`build_kg` metadata 已登记 `rule_count`）
-- [ ] 流程：`kind` 在 3 类枚举内（非法已兜底 `TASK`）、`flow.type` 在 4 类枚举内（非法已兜底 `SEQUENCE`）、`extractor="llm.proc.v1"`、`process_id`/`step_id`/`flow_id` 已补算、steps 有 label
+- [ ] 流程：`kind` 在 6 类枚举内（非法已兜底 `TASK`）、`flow.type` 在 4 类枚举内（非法已兜底 `SEQUENCE`）、`flow_type` 在 2 类枚举内（非法已兜底 `COLLABORATION`）、`approval_outcome` 在 4 类枚举内（非法已兜底 `OTHER`）、`reject_to` 越界已置 None、`extractor="llm.proc.v1"`、`process_id`/`step_id`/`flow_id` 已补算、steps 有 label
 - [ ] 流程 flow 下标越界已丢弃；流程未进入实体-边图谱（`build_kg` metadata 已登记 `process_count`）
 - [ ] 状态机：`extractor="llm.sm.v1"`、`sm_id`/`state_id`/`transition_id` 已补算、states 有 label、transitions 下标越界已丢弃
 - [ ] 函数指标：`extractor="llm.fn.v1"`、`output_type` 在 7 类枚举内（非法已兜底 `OTHER`）、`function_id` 已补算
 - [ ] 时态：`extractor="llm.tp.v1"`、`kind` 在 4 类枚举内（非法已兜底 `VALIDITY`）、`temporal_id` 已补算
 - [ ] 动作处置：`extractor="llm.ac.v1"`、`level` 在 3 类枚举内（非法已兜底 `OBSERVE`）、`action_id` 已补算
 - [ ] 约束：`extractor="llm.cn.v1"`、`type` 在 6 类枚举内（非法已兜底 `CONSISTENCY`）、`constraint_id` 已补算
-- [ ] 授权：`extractor="llm.pm.v1"`、`effect` 在 2 类枚举内（非法已兜底 `DENY`）、`permission_id` 已补算
+- [ ] 授权：`extractor="llm.pm.v1"`、`effect` 在 2 类枚举内（非法已兜底 `DENY`）、`data_scope` 在 5 类枚举内（非法已兜底 `OTHER`）、`permission_id` 已补算
 - [ ] 关系传导：`prop_kind` 在 4 类枚举内（非法/缺失已兜底空 = 普通事实）、`strength` 透传；传导字段已随边入图
-- [ ] 字段：`rule_type`/`certainty`/`actor_type` 非法已兜底 `OTHER`、rules `output_type` 非法已兜底 `OTHER`、attributes `required` 已 bool 化、`sub_process_ref`/`role`/`preconditions`/`postconditions`/`precondition`/`postcondition` 已透传
+- [ ] 字段：`rule_type`/`certainty`/`actor_type`/`data_scope`/`flow_type`/`approval_outcome` 非法已兜底（`OTHER`/`COLLABORATION`）、rules `output_type` 非法已兜底 `OTHER`、attributes `required` 已 bool 化、`reject_to` 越界已置 None、`sub_process_ref`/`role`/`lane`/`approval_chain`/`on_reject`/`preconditions`/`postconditions`/`precondition`/`postcondition` 已透传
 - [ ] `document_meta.source` 已取输入文档 URI（非空）
 - [ ] `validate extract` 已跑：软引用（reused_by/sub_process_ref/actor/role）若有未匹配，已出现 ⚠ warning 且不阻断
 - [ ] 六件套未进入实体-边图谱（`build_kg` metadata 已登记六件套各自 count）

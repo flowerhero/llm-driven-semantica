@@ -152,6 +152,10 @@ def _norm_process(p: dict) -> dict:
             "kind": st.get("kind") or "TASK",
             "actor": st.get("actor", ""),
             "sub_process_ref": st.get("sub_process_ref", ""),  # 子流程引用
+            # 审批流增强（v9 M6）：泳道 / 审批结果 / 驳回目标
+            "lane": st.get("lane", ""),
+            "approval_outcome": st.get("approval_outcome") or "",
+            "reject_to": st.get("reject_to") if st.get("reject_to") is not None else None,
             "evidence": st.get("evidence") or st.get("evidence_text") or "",
         })
     flows: list[dict] = []
@@ -161,11 +165,14 @@ def _norm_process(p: dict) -> dict:
             "to": f.get("to_index", f.get("to", -1)),
             "type": f.get("type") or "SEQUENCE",
             "condition": f.get("condition", ""),
+            "on_reject": f.get("on_reject", ""),  # 驳回边条件（v9 M6）
             "evidence": f.get("evidence") or f.get("evidence_text") or "",
         })
     return {
         "name": p.get("name", ""),
         "description": p.get("description", ""),
+        "flow_type": p.get("flow_type") or "",           # 流程类型（v9 M6）
+        "approval_chain": list(p.get("approval_chain") or []),  # 审批链路摘要（v9 M6）
         "steps": steps,
         "flows": flows,
         "preconditions": list(p.get("preconditions") or []),    # 前置条件
@@ -228,8 +235,9 @@ def _norm_six(data: dict) -> dict:
     permissions = [{
         "actor": p.get("actor", ""), "action": p.get("action", ""),
         "effect": p.get("effect") or "DENY", "scope": p.get("scope", ""),
-        # 角色中间层 + 主体类型
+        # 角色中间层 + 主体类型 + 数据可见范围
         "role": p.get("role", ""), "actor_type": p.get("actor_type") or "",
+        "data_scope": p.get("data_scope") or "",
         "evidence": ev(p),
     } for p in data.get("permissions") or []]
 
@@ -303,6 +311,21 @@ ACTOR_TYPE_COLOR = {
 FLOW_TYPE_COLOR = {
     "SEQUENCE": "#3E7CB1", "PARALLEL": "#16A085", "CONDITIONAL": "#D97706",
     "LOOP": "#8E44AD",
+}
+
+# 流程级类型独立配色（v9 M6 flowType：协作流/审批流）
+PROC_FLOW_TYPE_COLOR = {
+    "COLLABORATION": "#3E7CB1", "APPROVAL": "#B83227",
+}
+
+# 审批结果三态独立配色（v9 M6 approvalOutcomes：通过/否决/退回）
+APPROVAL_OUTCOME_COLOR = {
+    "APPROVE": "#16A085", "REJECT": "#C0392B", "RETURN": "#D97706", "OTHER": "#7D8C9E",
+}
+
+# 数据可见范围独立配色（v9 M5 dataScope：全机构/本人/本部门/自定义）
+DATA_SCOPE_COLOR = {
+    "ALL": "#16A085", "OWN": "#3E7CB1", "DEPT": "#8E44AD", "CUSTOM": "#D97706", "OTHER": "#7D8C9E",
 }
 
 # 预测决策本体六件套独立配色
@@ -493,8 +516,8 @@ _HTML_TPL = """<!DOCTYPE html>
     <div class="toolbar">
       <input id="pms" placeholder="搜索主体 / 动作 / 范围…">
     </div>
-    <table id="pmtab"><thead><tr><th>主体</th><th>动作</th><th>效果</th><th>范围</th><th>角色</th><th>主体类型</th><th>evidence（原文引用）</th></tr></thead><tbody></tbody></table>
-    <div class="tip">主体-动作授权（RBAC）：谁能（不能）执行什么动作，决策自动化的治理层。效果：PERMIT 允许 / DENY 禁止（默认禁止，最小权限原则）。</div>
+    <table id="pmtab"><thead><tr><th>主体</th><th>动作</th><th>效果</th><th>范围</th><th>角色</th><th>主体类型</th><th>数据范围</th><th>evidence（原文引用）</th></tr></thead><tbody></tbody></table>
+    <div class="tip">主体-动作授权（RBAC）：谁能（不能）执行什么动作，决策自动化的治理层。效果：PERMIT 允许 / DENY 禁止（默认禁止，最小权限原则）。数据范围（v9 M5 dataScope）：ALL 全机构 / OWN 本人 / DEPT 本部门 / CUSTOM 自定义。</div>
   </div>
 </div>
 <script>
@@ -670,10 +693,12 @@ function wrapLines(s, fs, maxW, maxLines){
   if (!host) return;
   const SK = DATA.step_kind_color || {};
   const FT = DATA.flow_type_color || {};
+  const PFT = DATA.proc_flow_type_color || {};
+  const AO = DATA.approval_outcome_color || {};
   const procs = DATA.processes || [];
   const es = document.getElementById('ps');
   const FLOW_LABEL = {SEQUENCE:'顺序', PARALLEL:'并行', CONDITIONAL:'分支', LOOP:'循环'};
-  const KIND_LABEL = {TASK:'活动', GATEWAY:'决策', EVENT:'事件'};
+  const KIND_LABEL = {TASK:'活动', GATEWAY:'决策', EVENT:'事件', START:'开始', END:'结束', SYSTEM_TASK:'系统任务'};
   const BW = 190, BH = 80, GX = 44, GY = 160;   // 节点宽/高/水平间距/行间距（BH 加高容纳两行标签）
   const GUTTER = 180;                            // 右走廊宽度：跨行折线的标签区（防文字被画布右缘裁剪）
   const PER_ROW = 3;                             // 每行节点数（多行蛇形布局，避免窄屏过宽）
@@ -711,6 +736,10 @@ function wrapLines(s, fs, maxW, maxLines){
       if (fi<0 || ti<0 || fi>=n || ti>=n) return;
       const ft = f.type || 'SEQUENCE';
       const color = FT[ft] || '#999';
+      // 驳回回跳（v9 M6）：回跳且带 on_reject / 涉及 RETURN 步骤 → 红色虚线
+      const isReject = (ti < fi) && (f.on_reject || (steps[ti]||{}).approval_outcome==='RETURN' || (steps[fi]||{}).approval_outcome==='RETURN');
+      const rjColor = '#C0392B';
+      const strokeColor = isReject ? rjColor : color;
       const dash = (ft==='PARALLEL') ? ' stroke-dasharray="7,5"' : '';
       const R = X0 + cols*(BW+GX) - GX;          // 最右节点左缘 x（折线右折点参考）
       let d, label = FLOW_LABEL[ft]||ft, lx, ly, anchor = 'middle';
@@ -725,16 +754,20 @@ function wrapLines(s, fs, maxW, maxLines){
         d = 'M '+x1+' '+y1+' L '+(R+GUTTER/2)+' '+y1+' L '+(R+GUTTER/2)+' '+(ny(ti)-16)+' L '+ncx(ti)+' '+(ny(ti)-16)+' L '+ncx(ti)+' '+(ny(ti)+2);
         lx = R+GUTTER/2+6; ly = (y1+ny(ti)-16)/2; anchor = 'start';
       } else {
-        // 回跳（LOOP/反向）：右折→上→进 ti 顶部
+        // 回跳（LOOP/反向/驳回）：右折→上→进 ti 顶部
         d = 'M '+x1+' '+y1+' L '+(R+GUTTER/2)+' '+y1+' L '+(R+GUTTER/2)+' '+(ny(ti)-20)+' L '+(ncx(ti))+' '+(ny(ti)-20)+' L '+ncx(ti)+' '+(ny(ti)+2);
         lx = R+GUTTER/2+6; ly = (y1+ny(ti)-20)/2; anchor = 'start';
       }
-      s += '<path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="2"'+(ft==='LOOP'?' stroke-dasharray="9,4"':'')+dash+' marker-end="url(#arr'+ft+'_'+uid+')"/>';
+      s += '<path d="'+d+'" fill="none" stroke="'+strokeColor+'" stroke-width="'+(isReject?2.4:2)+'"'
+        + ((isReject||ft==='LOOP') ? ' stroke-dasharray="9,4"' : '') + dash
+        + (isReject ? '' : ' marker-end="url(#arr'+ft+'_'+uid+')"') + '/>';
       // 类型 + 条件标签：跨行/回跳在右走廊左对齐分两行；同行在节点上方居中单行（均按像素截断，防溢出）
       if (anchor === 'start') {
         let yy = ly;
-        s += '<text x="'+lx+'" y="'+yy+'" text-anchor="start" font-size="11" fill="'+color+'" font-weight="600">'+esc(label)+'</text>';
-        if (f.condition) s += '<text x="'+lx+'" y="'+(yy+14)+'" text-anchor="start" font-size="10.5" fill="#6B7280">'+esc(truncW(f.condition, 10.5, 84))+'</text>';
+        const lbl = isReject ? '驳回' : label;
+        s += '<text x="'+lx+'" y="'+yy+'" text-anchor="start" font-size="11" fill="'+(isReject?rjColor:color)+'" font-weight="600">'+esc(lbl)+'</text>';
+        const cond = isReject ? (f.on_reject || f.condition || '') : f.condition;
+        if (cond) s += '<text x="'+lx+'" y="'+(yy+14)+'" text-anchor="start" font-size="10.5" fill="#6B7280">'+esc(truncW(cond, 10.5, 84))+'</text>';
       } else {
         s += '<text x="'+lx+'" y="'+ly+'" text-anchor="middle" font-size="11" fill="'+color+'" font-weight="600">'+esc(label)
           + (f.condition ? ' · '+esc(truncW(f.condition, 11, 130)) : '') + '</text>';
@@ -762,6 +795,12 @@ function wrapLines(s, fs, maxW, maxLines){
         s += '<text x="'+(x+12)+'" y="'+(y+ty+li*lh)+'" font-size="'+lblFs+'" fill="#1A1B1C" font-weight="500">'+esc(ln)+'</text>';
       });
       if (st.actor) s += '<text x="'+(x+12)+'" y="'+(y+ty+lines.length*lh+6)+'" font-size="10" fill="#6B7280">'+esc(truncW('执行：'+st.actor, 10, BW-24))+'</text>';
+      // 审批结果徽标（v9 M6）：节点右上角小圆点 + title
+      if (st.approval_outcome && st.approval_outcome !== 'OTHER') {
+        const ac = AO[st.approval_outcome] || '#999';
+        s += '<circle cx="'+(x+BW-10)+'" cy="'+(y+12)+'" r="5" fill="'+ac+'" stroke="#fff" stroke-width="1.5">'
+          + '<title>'+esc(st.approval_outcome)+'</title></circle>';
+      }
       s += '</g>';
     });
     s += '</svg>';
@@ -781,7 +820,10 @@ function wrapLines(s, fs, maxW, maxLines){
       if (q && !hit) return;
       const card = document.createElement('div');
       card.style.cssText = 'border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px;';
-      let html = '<div style="font-size:15px;font-weight:600;color:var(--accent);margin-bottom:2px;">'+(pi+1)+'. '+esc(p.name)+'</div>';
+      let html = '<div style="font-size:15px;font-weight:600;color:var(--accent);margin-bottom:2px;">'+(pi+1)+'. '+esc(p.name)
+        + (p.flow_type ? ' <span class="badge" style="background:'+(PFT[p.flow_type]||'#999')+'">'+p.flow_type+'</span>' : '')
+        + (p.approval_chain && p.approval_chain.length ? ' <span style="font-size:11px;color:#6B7280;font-weight:400;">审批链：'+esc(p.approval_chain.join(' → '))+'</span>' : '')
+        + '</div>';
       if (p.description) html += '<div style="font-size:12px;color:var(--sub);margin-bottom:10px;">'+esc(p.description)+'</div>';
       // 流程级前后置条件
       const pre = p.preconditions || [], post = p.postconditions || [];
@@ -795,26 +837,30 @@ function wrapLines(s, fs, maxW, maxLines){
       html += '<div style="margin-bottom:4px;">'+svgFlow(p, pi)+'</div>';
       // 步骤表
       html += '<div style="font-size:12px;color:var(--sub);font-weight:600;margin:10px 0 4px;">步骤（'+steps.length+'）</div>'
-        + '<table style="font-size:12.5px;"><thead><tr><th>#</th><th>步骤</th><th>类型</th><th>执行者</th><th>子流程引用</th><th>evidence</th></tr></thead><tbody>';
+        + '<table style="font-size:12.5px;"><thead><tr><th>#</th><th>步骤</th><th>类型</th><th>执行者</th><th>泳道</th><th>审批结果</th><th>驳回至</th><th>子流程引用</th><th>evidence</th></tr></thead><tbody>';
       steps.forEach(st => {
         const kind = st.kind||'TASK';
         html += '<tr><td>'+(st.index!=null?st.index:'<span style="color:#bbb">—</span>')
           +'</td><td>'+esc(st.label)+'</td>'
           +'<td><span class="badge" style="background:'+(SK[kind]||'#999')+'">'+(kind)+'</span></td>'
           +'<td>'+(st.actor?esc(st.actor):'<span style="color:#bbb">—</span>')+'</td>'
+          +'<td>'+(st.lane?esc(st.lane):'<span style="color:#bbb">—</span>')+'</td>'
+          +'<td>'+(st.approval_outcome ? '<span class="badge" style="background:'+(AO[st.approval_outcome]||'#999')+'">'+st.approval_outcome+'</span>' : '<span style="color:#bbb">—</span>')+'</td>'
+          +'<td>'+(st.reject_to!=null?st.reject_to:'<span style="color:#bbb">—</span>')+'</td>'
           +'<td>'+(st.sub_process_ref?esc(st.sub_process_ref):'<span style="color:#bbb">—</span>')+'</td>'
           +'<td class="ev">'+esc(st.evidence||'')+'</td></tr>';
       });
       html += '</tbody></table>';
       // 控制流表
       html += '<div style="font-size:12px;color:var(--sub);font-weight:600;margin:10px 0 4px;">控制流（'+flows.length+'）</div>'
-        + '<table style="font-size:12.5px;"><thead><tr><th>from</th><th>to</th><th>类型</th><th>条件</th><th>evidence</th></tr></thead><tbody>';
+        + '<table style="font-size:12.5px;"><thead><tr><th>from</th><th>to</th><th>类型</th><th>条件</th><th>驳回条件</th><th>evidence</th></tr></thead><tbody>';
       flows.forEach(f => {
         const ft = f.type||'SEQUENCE';
         html += '<tr><td>'+(f.from!=null?f.from:'<span style="color:#bbb">—</span>')+'</td>'
           +'<td>'+(f.to!=null?f.to:'<span style="color:#bbb">—</span>')+'</td>'
           +'<td><span class="badge" style="background:'+(FT[ft]||'#999')+'">'+ft+'</span></td>'
           +'<td>'+(f.condition?esc(f.condition):'<span style="color:#bbb">—</span>')+'</td>'
+          +'<td>'+(f.on_reject?esc(f.on_reject):'<span style="color:#bbb">—</span>')+'</td>'
           +'<td class="ev">'+esc(f.evidence||'')+'</td></tr>';
       });
       html += '</tbody></table>';
@@ -1046,6 +1092,7 @@ function wrapLines(s, fs, maxW, maxLines){
   const tb = host.querySelector('tbody');
   const PE = DATA.permission_effect_color || {};
   const AT = DATA.actor_type_color || {};
+  const DS = DATA.data_scope_color || {};
   const pms = DATA.permissions || [];
   const es = document.getElementById('pms');
   function render(){
@@ -1060,6 +1107,7 @@ function wrapLines(s, fs, maxW, maxLines){
           +'<td>'+(p.scope?esc(p.scope):'<span style="color:#bbb">—</span>')+'</td>'
           +'<td>'+(p.role?esc(p.role):'<span style="color:#bbb">—</span>')+'</td>'
           +'<td>'+(p.actor_type ? '<span class="badge" style="background:'+(AT[p.actor_type]||'#999')+'">'+p.actor_type+'</span>' : '<span style="color:#bbb">—</span>')+'</td>'
+          +'<td>'+(p.data_scope ? '<span class="badge" style="background:'+(DS[p.data_scope]||'#999')+'">'+p.data_scope+'</span>' : '<span style="color:#bbb">—</span>')+'</td>'
           +'<td class="ev">'+esc(p.evidence||'')+'</td>';
         tb.appendChild(tr);
       });
@@ -1433,6 +1481,9 @@ def _render(entities, relations, attributes, rules, processes, title: str,
                "modality_color": MODALITY_COLOR,
                "step_kind_color": STEP_KIND_COLOR,
                "flow_type_color": FLOW_TYPE_COLOR,
+               "proc_flow_type_color": PROC_FLOW_TYPE_COLOR,
+               "approval_outcome_color": APPROVAL_OUTCOME_COLOR,
+               "data_scope_color": DATA_SCOPE_COLOR,
                "func_output_color": FUNC_OUTPUT_COLOR,
                "temporal_kind_color": TEMPORAL_KIND_COLOR,
                "action_level_color": ACTION_LEVEL_COLOR,

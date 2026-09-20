@@ -189,6 +189,19 @@ python scripts/render_viewer.py --in <contract.json> --out <contract.html> [--ti
 > 四件套并行不互斥（同一句可同时产出关系与规则）。
 > **不抽**定义、标题、序言、交叉引用表等非规则段落（防规则集膨胀——De Jure 做法）。
 
+**规则四层分级判定顺序（2026-09-20 借鉴 sharptoolbox v9，写进提示词）**：
+规则按「生效位置」分四层，抽取出时按下列顺序**逐层下沉**，避免规则集膨胀：
+
+| 层 | 判定 | 放哪 | 示例 |
+|---|---|---|---|
+| L1 属性内置 | 值域/必录是**单个属性的取值约束** | `attributes[].required` / `value_type`（必要时 `constraints[]`） | "问卷应当包含风险承受能力评估" → required=true |
+| L2 refRules | 规则是**实体-实体间的引用/关联约束**（引用另一实体才成立） | `relations[]`（必要时 `rules[]` 标注） | "匹配与其风险承受能力等级相适应的产品或服务" → 匹配关系 |
+| L3 invariants | 规则是**跨属性的不变量/整体一致性**（不依赖具体对象） | `constraints[]`（SHACL 式） | "风险等级由低至高至少划分为五级" → ENUM 约束 |
+| L4 业务规则 | 规则含**道义动词或条件-动作结构**，且不属于 L1-L3 | `rules[]`（完整条件-动作+模态） | "应当进行特别的书面风险警示" → OBLIGATION |
+
+> 同一句可能命中多层（如"应当按不低于 10% 回访"既是 L3 值域也是 L4 义务），
+> 允许并存；但**先判 L1-L3，能下沉就不堆进 rules[]**。判不出层级仍按 L4 处理。
+
 ### 10.2 规则结构与五字段
 
 | 字段 | 含义 | 约束 |
@@ -262,20 +275,28 @@ python scripts/render_viewer.py --in <contract.json> --out <contract.html> [--ti
 ### 11.3 流程结构：steps + flows
 
 ```
-processes: [{ name, description, steps:[{label, kind, actor, evidence}],
-              flows:[{from, to, type, condition, evidence}] }]
+processes: [{ name, description, flow_type?, approval_chain?, steps:[{label, kind, actor, evidence, lane?, reject_to?, approval_outcome?, sub_process_ref?}],
+              flows:[{from, to, type, condition, evidence, on_reject?}], preconditions?, postconditions? }]
 ```
 
 | 字段 | 含义 | 约束 |
 |---|---|---|
 | `name` | 流程名 | 短名，如「投资者适当性管理流程」（**内容寻址锚**） |
 | `description` | 流程说明 | 可空 |
+| `flow_type` | 流程类型（v9 M6 借鉴） | `COLLABORATION APPROVAL`；**审批/审核/复核/会签流程 → `APPROVAL`**；判不出 `COLLABORATION` |
+| `approval_chain` | 审批链路摘要 | 角色/岗位名数组（如 `["初审岗","复核岗","终审岗"]`）；可空，多级审批以 steps 顺序为准 |
+| `preconditions` / `postconditions` | 流程级前后置条件 | 字符串数组，自然语言，可空 |
 | `steps[].label` | 步骤内容（做什么） | **必有** |
-| `steps[].kind` | 步骤类型（独立 3 类枚举） | `TASK GATEWAY EVENT`；判不出用 `TASK`，不自创类型 |
+| `steps[].kind` | 步骤类型（独立 6 类枚举） | `TASK GATEWAY EVENT START END SYSTEM_TASK`；判不出用 `TASK`，不自创类型 |
 | `steps[].actor` | 执行者 | 用实体 canonical（不强建新实体）；**可空** |
+| `steps[].lane` | 泳道（v9 M6 借鉴） | 步骤所属角色/部门（软引用，可空） |
+| `steps[].approval_outcome` | 审批结果（v9 M6 借鉴） | `APPROVE REJECT RETURN`；仅审批类步骤用；判不出省略或 `OTHER` |
+| `steps[].reject_to` | 驳回目标（v9 M6 借鉴） | **整数下标**引用 steps；仅 `RETURN` 时填（回到修改/补正步骤）；越界由薄壳丢弃 |
+| `steps[].sub_process_ref` | 子流程引用 | 引用另一流程 `name`；可空 |
 | `flows[].from/to` | **整数下标**引用 steps（0-based） | LLM 输出下标，Python 越界校验丢弃 |
 | `flows[].type` | 控制流类型（独立 4 类枚举） | 见下表 |
 | `flows[].condition` | 分支条件 | 仅 CONDITIONAL 用，可空 |
+| `flows[].on_reject` | 驳回边条件（v9 M6 借鉴） | 自然语言补充（如"退回补充材料"），可空；与步骤级 `reject_to` 并存时以步骤级为权威 |
 
 ### 11.4 kind / flow.type：两个独立枚举（不复用实体/属性/规则类型）
 
@@ -292,6 +313,16 @@ processes: [{ name, description, steps:[{label, kind, actor, evidence}],
 | `CONDITIONAL` | 排他分支（XOR-split） | Exclusive Choice | 如果…则…否则…；当…时 | |
 | `LOOP` | 循环 | Loop | 重复；直到；每次…都 | |
 
+| approval_outcome | 含义 | 中文线索 | 配合 |
+|---|---|---|---|
+| `APPROVE` | 通过 | 同意 / 批准 / 审核通过 | 无 |
+| `REJECT` | 否决（流程终止） | 不予批准 / 否决 / 驳回申请 | 通常无 reject_to |
+| `RETURN` | 退回（修改后重报） | 退回修改 / 退回重报 / 补正材料 | **必有 reject_to**（指向修改步骤） |
+| `OTHER` | 逃生口 | 判不出就用它 | |
+
+> flow_type / approval_outcome 是**流程级与步骤级的正交枚举**：flow_type 回答
+> 「整个流程是不是审批流」，approval_outcome 回答「某个审批步骤的结果是什么」。
+
 ### 11.5 惰性锚点
 
 | 锚点 | 规则 | 位置 |
@@ -301,6 +332,9 @@ processes: [{ name, description, steps:[{label, kind, actor, evidence}],
 | flow_id | `sha256(process_id, from, to, type, condition)` 内容寻址 | `smini/ids.py` |
 | kind | 薄壳校验，非法 → `TASK` 兜底 | 薄壳 |
 | flow.type | 薄壳校验，非法 → `SEQUENCE` 兜底 | 薄壳 |
+| flow_type | 薄壳校验，非法 → `COLLABORATION` 兜底 | 薄壳 |
+| approval_outcome | 薄壳校验，非法 → `OTHER` 兜底 | 薄壳 |
+| reject_to | 下标越界（<0 或 ≥len(steps)）→ **置 None**（同 flow 下标处理） | 薄壳 |
 | flow 下标 | from/to 越界（<0 或 ≥len(steps)）→ **丢弃该 flow**（LLM 下标不可信） | 薄壳 |
 | 去重 | 同 name 即同流程，按 process_id 合并 | 薄壳 |
 | 入图 | **不入实体-边图**（流程是持续体 perdurant，不是实体间事实）；`build_kg` metadata 登记 `process_count` | `build_kg.py` |
@@ -344,6 +378,13 @@ processes: [{ name, description, steps:[{label, kind, actor, evidence}],
 | `permissions` | `actor_type` | 主体类型 | `HUMAN SYSTEM OTHER`；非法 → `OTHER` |
 | `attributes` | `required` | 属性必录性（M1 required） | 布尔；字符串 "是/必填" 也可识别；缺省 `False` |
 | `attributes` | `value_type` 扩展 | 字典/实体引用 | `DICT_REF ENTITY_REF` 新增；非法 → `OTHER` |
+| `permissions` | `data_scope` | 数据可见范围（v9 M5 dataScope 借鉴） | `ALL OWN DEPT CUSTOM OTHER`；非法 → `OTHER`；金融数据隔离：本人 OWN / 本部门 DEPT / 全机构 ALL |
+| `processes` | `flow_type` | 流程类型（v9 M6 flowType 借鉴） | `COLLABORATION APPROVAL`；非法 → `COLLABORATION` |
+| `processes` | `approval_chain` | 审批链路摘要（v9 M6 借鉴） | 角色/岗位名数组，可空；多级审批以 steps 顺序为准 |
+| `processes.steps` | `lane` | 泳道（v9 M6 借鉴） | 角色/部门名（软引用），可空 |
+| `processes.steps` | `approval_outcome` | 审批结果三态（v9 M6 approvalOutcomes 借鉴） | `APPROVE REJECT RETURN OTHER`；非法 → `OTHER` |
+| `processes.steps` | `reject_to` | 驳回目标（v9 M6 借鉴） | 整数下标引用 steps；RETURN 必有；越界 → None |
+| `processes.flows` | `on_reject` | 驳回边条件（v9 M6 借鉴） | 自然语言补充，可空 |
 
 ### 12.2 B 组结构增强（3 项）
 
@@ -366,6 +407,15 @@ processes: [{ name, description, steps:[{label, kind, actor, evidence}],
 >   填被调流程的 `name`；不是把步骤拆开重写。
 > - `role` vs `actor`：`actor` 是具体主体（人/系统/岗位实例），`role` 是
 >   中间层角色（如"适当性管理岗"）；文本只给角色时填 `role`，`actor` 可空。
+> - `data_scope`：主体执行动作时**能看到哪一层数据**——仅本人数据 → `OWN`，
+>   本部门/本单位 → `DEPT`，全机构 → `ALL`，需原文限定（如"仅限所管客户"）
+>   无法归入前三类 → `CUSTOM`（配合 scope 描述）。判不出省略或 `OTHER`。
+> - `flow_type`：流程是否**审批流**（含审批/审核/复核/批准/会签步骤）→
+>   `APPROVAL`；一般端到端流程 → `COLLABORATION`。
+> - `approval_outcome` / `reject_to`：审批步骤的结果——通过 `APPROVE`；
+>   否决 `REJECT`（流程终止，通常无 reject_to）；退回 `RETURN`（**必有
+>   reject_to** 指向被退回修改的步骤下标）。文本只给"退回重新提交"时，
+>   reject_to 指向"提交"步骤。
 > - `required`：属性是否**必录**（"应当包含""必须填写"→ true）。
 > - 所有新增字段**可空**：拿不准就不输出，薄壳兜底，不自创值。
 
@@ -397,9 +447,10 @@ states:      [{ object, name?, states:[{label, initial?}],
                 transitions:[{from, to, event?, condition?, action?}] }]
 functions:   [{ name, subject?, formula, inputs?, output_type, evidence }]
 temporal:    [{ subject, kind, value, anchor?, evidence }]
-actions:     [{ name, actor?, level, target?, side_effect?, trigger?, evidence }]
+actions:     [{ name, actor?, level, target?, side_effect?, trigger?, precondition?, postcondition?, evidence }]
 constraints: [{ subject, type, description, evidence }]
-permissions: [{ actor, action, effect, scope?, evidence }]
+permissions: [{ actor, action, effect, scope?, role?, actor_type?, data_scope?, evidence }]
+processes:   [{ name, description, flow_type?, approval_chain?, steps, flows, preconditions?, postconditions? }]
 ```
 
 ### 12.3 六个独立枚举（不复用实体/属性/规则/流程类型）
@@ -411,6 +462,7 @@ permissions: [{ actor, action, effect, scope?, evidence }]
 | `actions[].level` | `OBSERVE WARN INTERVENE` | 观察→警示→干预 | `OBSERVE` |
 | `constraints[].type` | `CARDINALITY VALUE_RANGE ENUM DISJOINT REQUIRED CONSISTENCY` | 基数/值域/枚举/不相交/必填/一致性 | `CONSISTENCY` |
 | `permissions[].effect` | `PERMIT DENY` | 允许/禁止（默认禁止=最小权限） | `DENY` |
+| `permissions[].data_scope` | `ALL OWN DEPT CUSTOM OTHER` | 数据可见范围（v9 M5 dataScope 借鉴） | `OTHER` |
 | `relations[].prop_kind` | `FACTUAL DEPENDENCY CAUSAL TRIGGER` | 事实/依赖/因果/触发 | 省略=普通事实 |
 
 ### 12.4 判定原则（写进提示词，无代码规则）
@@ -448,7 +500,8 @@ permissions: [{ actor, action, effect, scope?, evidence }]
 | action_id | `sha256(name, actor, level, trigger)` | `smini/ids.py` |
 | constraint_id | `sha256(subject, type, description)` | `smini/ids.py` |
 | permission_id | `sha256(actor, action, effect)` | `smini/ids.py` |
-| 六件套枚举兜底 | output_type→`OTHER`、kind→`VALIDITY`、level→`OBSERVE`、constraint.type→`CONSISTENCY`、effect→`DENY` | 薄壳 |
+| 六件套枚举兜底 | output_type→`OTHER`、kind→`VALIDITY`、level→`OBSERVE`、constraint.type→`CONSISTENCY`、effect→`DENY`、data_scope→`OTHER` | 薄壳 |
+| 流程审批字段兜底 | flow_type→`COLLABORATION`、approval_outcome→`OTHER`、reject_to 越界→None | 薄壳 |
 | prop_kind / strength | 薄壳校验，非法/缺失 → 空（普通事实 FACTUAL） | 薄壳 |
 | 去重 | 按各 ID 内容寻址合并 | 薄壳 |
 | 入图 | **不入实体-边图**；`build_kg` metadata 登记六件套各自 count；`prop_kind`/`strength` 作为边属性入图 | `build_kg.py` |

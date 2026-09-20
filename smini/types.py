@@ -66,6 +66,8 @@ __all__ = [
     # Step 4 预测决策本体抽取（v6）
     "FunctionOutputType", "TemporalKind", "ActionLevel", "ConstraintType",
     "PermissionEffect", "RelationPropKind",
+    # 2026-09-20 借鉴（v9）：数据范围 / 流程类型 / 审批结果三态
+    "DataScope", "ProcessFlowType", "ApprovalOutcome",
     "StateDef", "TransitionDef", "StateMachine",
     "Function", "Temporal", "Action", "Constraint", "Permission",
     # Step 5
@@ -364,6 +366,44 @@ class PermissionEffect(_StrEnum):
     """
     PERMIT = "PERMIT"              # 允许执行
     DENY = "DENY"                  # 禁止执行
+
+
+class DataScope(_StrEnum):
+    """数据可见范围（2026-09-20 借鉴 sharptoolbox v9 M5 Permission.dataScope）。
+
+    权限除「谁能做什么」外，还表达「能看到哪一层数据」——金融场景的
+    本人/本部门/全机构数据隔离。判不出用 ``OTHER``，不自创类型。
+    """
+    ALL = "ALL"                    # 全机构可见
+    OWN = "OWN"                    # 仅本人/本人名下数据
+    DEPT = "DEPT"                  # 本部门/本单位范围
+    CUSTOM = "CUSTOM"              # 自定义范围（配合 scope 描述）
+    OTHER = "OTHER"                # 逃生口：判不出就用它
+
+
+class ProcessFlowType(_StrEnum):
+    """流程类型（2026-09-20 借鉴 sharptoolbox v9 M6 flowType）。
+
+    流程整体的类别：端到端协同流（COLLABORATION）或审批流（APPROVAL）。
+    与 FlowType（步骤间控制流 SEQUENCE/PARALLEL/CONDITIONAL/LOOP）正交：
+    流程级类型描述「这是什么流」，控制流描述「步骤怎么连」。
+    判不出用 ``COLLABORATION``，不自创类型。
+    """
+    COLLABORATION = "COLLABORATION"  # 端到端业务协同流（默认）
+    APPROVAL = "APPROVAL"            # 审批流：审批/审核/复核/批准/会签
+
+
+class ApprovalOutcome(_StrEnum):
+    """审批结果三态（2026-09-20 借鉴 sharptoolbox v9 M6 approvalOutcomes）。
+
+    审批步骤的处理结果：通过 / 否决（流程终止）/ 退回（修改后重报）。
+    与 ``reject_to`` 配合：RETURN 必有 reject_to（回到修改步骤），REJECT
+    通常无 reject_to（流程终止）。判不出用 ``OTHER``，不自创类型。
+    """
+    APPROVE = "APPROVE"            # 通过：同意/批准/审核通过
+    REJECT = "REJECT"              # 否决：不予批准/否决/驳回申请（流程终止）
+    RETURN = "RETURN"              # 退回：退回修改/退回重报/补正材料（配合 reject_to）
+    OTHER = "OTHER"                # 逃生口：判不出就用它
 
 
 class RelationPropKind(_StrEnum):
@@ -1049,6 +1089,11 @@ class ProcessStep:
     # v7 借鉴（M6 SUB_FLOW_CALL）：本步骤是对另一流程的子流程调用
     # （引用被调流程的 name；薄壳仅软校验存在性，不展开执行）。
     sub_process_ref: str = ""
+    # 2026-09-20 借鉴（v9 M6 审批流增强）：泳道（角色/部门名，软引用）+
+    # 驳回目标（整数下标引用 steps，越界丢弃）+ 审批结果三态（可空）。
+    lane: str = ""
+    reject_to: int | None = None
+    approval_outcome: "ApprovalOutcome" = ApprovalOutcome.OTHER
 
 
 @dataclass
@@ -1072,6 +1117,9 @@ class ProcessFlow:
     confidence: float = 1.0
     provenance: Provenance | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    # 2026-09-20 借鉴（v9 M6 审批流增强）：驳回边条件（自然语言补充；
+    # 与步骤级 reject_to 并存时以步骤级为权威）。
+    on_reject: str = ""
 
 
 @dataclass
@@ -1105,6 +1153,10 @@ class Process:
      # 流程结束后必然成立的业务状态），自然语言表达，可空。
     preconditions: list[str] = field(default_factory=list)
     postconditions: list[str] = field(default_factory=list)
+    # 2026-09-20 借鉴（v9 M6 审批流增强）：流程类型（协同流/审批流）+
+    # 审批链路摘要（角色/岗位名数组，冗余摘要；多级审批以 steps 顺序为准）。
+    flow_type: "ProcessFlowType" = ProcessFlowType.COLLABORATION
+    approval_chain: list[str] = field(default_factory=list)
 
 
 # ===========================================================================
@@ -1324,6 +1376,9 @@ class Permission:
     # 与主体类型（人工/系统自动）。
     role: str = ""
     actor_type: "ActorType" = ActorType.OTHER
+    # 2026-09-20 借鉴（v9 M5 Permission.dataScope）：数据可见范围
+    # （全机构/本人/本部门/自定义）——金融数据隔离场景。不参与寻址。
+    data_scope: "DataScope" = DataScope.OTHER
 
 
 @dataclass(frozen=True)

@@ -128,6 +128,20 @@
                 },
                 "sub_process_ref": {
                   "type": "string"
+                },
+                "lane": {
+                  "type": "string",
+                  "description": "泳道（2026-09-20 借鉴 v9 M6）：步骤所属角色/部门（软引用，可空）"
+                },
+                "reject_to": {
+                  "type": ["integer", "null"],
+                  "minimum": 0,
+                  "description": "驳回目标步骤下标（2026-09-20 借鉴 v9 M6 approvalOutcomes 配合字段；RETURN 时指向修改步骤，越界由薄壳丢弃为 null）"
+                },
+                "approval_outcome": {
+                  "type": "string",
+                  "enum": ["APPROVE", "REJECT", "RETURN", "OTHER"],
+                  "description": "审批结果三态（2026-09-20 借鉴 v9 M6）：通过 APPROVE / 否决 REJECT（流程终止）/ 退回 RETURN（配合 reject_to）/ 判不出 OTHER"
                 }
               }
             }
@@ -213,6 +227,10 @@
                 },
                 "metadata": {
                   "type": "object"
+                },
+                "on_reject": {
+                  "type": "string",
+                  "description": "驳回边条件（2026-09-20 借鉴 v9 M6）：自然语言补充，与步骤级 reject_to 并存时以步骤级为权威；可空"
                 }
               }
             }
@@ -247,6 +265,18 @@
             "items": {
               "type": "string"
             }
+          },
+          "flow_type": {
+            "type": "string",
+            "enum": ["COLLABORATION", "APPROVAL"],
+            "description": "流程类型（2026-09-20 借鉴 v9 M6 flowType）：协同流 COLLABORATION / 审批流 APPROVAL；判不出用 COLLABORATION"
+          },
+          "approval_chain": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "审批链路摘要（2026-09-20 借鉴 v9 M6）：角色/岗位名数组，多级审批以 steps 顺序为准；可空"
           }
         }
       }
@@ -882,6 +912,11 @@
               "SYSTEM",
               "OTHER"
             ]
+          },
+          "data_scope": {
+            "type": "string",
+            "enum": ["ALL", "OWN", "DEPT", "CUSTOM", "OTHER"],
+            "description": "数据可见范围（2026-09-20 借鉴 v9 M5 Permission.dataScope）：全机构 ALL / 本人 OWN / 本部门 DEPT / 自定义 CUSTOM / 判不出 OTHER"
           }
         }
       }
