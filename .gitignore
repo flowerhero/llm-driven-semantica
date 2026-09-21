@@ -37,3 +37,10 @@ agents/
 # ===== 发布排除：内部文档 / 私有素材 / 备份 =====
 docs/memory/
 smini-extract.backup-*/
+
+# ===== 红线（历史约定，禁止入库）=====
+uv.lock
+tests/fixtures/*.pdf
+
+# ===== 访谈项目运行数据（含用户业务内容，禁止入库）=====
+projects/

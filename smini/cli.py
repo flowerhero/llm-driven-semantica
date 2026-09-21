@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 from typing import Sequence
 
 from .pipeline_factory import build_pipeline, make_context
@@ -136,11 +137,169 @@ def _print_usage() -> None:
         "  validate      按 JSON Schema + 领域约束校验产物（extract）\n"
         "  graph         build 建图（惰性锚点消费层）\n"
         "\n"
+        "项目与访谈（访谈式本体构建 v1.1，宿主 LLM 声明式驱动）:\n"
+        "  project       project list|create|status|archive|ingest（项目生命周期薄壳）\n"
+        "  interview     interview new|append|finish|abort|summary（访谈控制器薄壳）\n"
+        "\n"
         "示例:\n"
         "  python -m smini.cli build --sample\n"
         "  python -m smini.cli build --sample --host-contract contract.json\n"
+        "  python -m smini.cli project create 适当性管理项目 --domain 金融/适当性\n"
+        "  python -m smini.cli interview new 适当性管理项目\n"
+        "  python -m smini.cli interview append 适当性管理项目 --user '回答' --delta delta.json\n"
+        "  python -m smini.cli interview finish 适当性管理项目\n"
         "  python -m smini.cli build --help\n"
     )
+
+
+def _project_cmd(argv: Sequence[str]) -> int:
+    """项目生命周期薄壳：project list|create|status|archive。"""
+    from .steps.project import ProjectManager
+
+    if not argv or argv[0] in ("--help", "-h"):
+        print("用法: python -m smini.cli project <list|create|status|archive> [参数]")
+        return 0
+    sub, *rest = argv
+    pm = ProjectManager()
+    if sub == "list":
+        for e in pm.list():
+            print(f"{e['name']:<24} {e['status']:<8} 来源 {e['sources']}  "
+                  f"更新 {e['updated_at']}")
+        return 0
+    if sub == "create":
+        p = argparse.ArgumentParser(prog="smini project create")
+        p.add_argument("name")
+        p.add_argument("--domain", default="")
+        p.add_argument("--goal", default="")
+        args = p.parse_args(rest)
+        proj = pm.create(args.name, domain=args.domain, goal=args.goal)
+        print(json.dumps({k: proj[k] for k in
+                          ("project_id", "name", "domain", "status")},
+                         ensure_ascii=False, indent=2))
+        return 0
+    if sub == "status":
+        if not rest:
+            print("project status 需要项目名", file=sys.stderr)
+            return 2
+        proj = pm.open(rest[0])
+        print(f"项目：{proj['name']}（{proj['status']}）  领域：{proj['domain']}")
+        print(f"来源 {len(proj['sources'])} 个；未决冲突 "
+              f"{sum(1 for c in proj['conflicts'] if not c['resolved'])} 个")
+        cov = proj["covered"]
+        print("覆盖：", ", ".join(f"{k}={cov[k]}" for k in cov if cov[k]))
+        return 0
+    if sub == "archive":
+        if not rest:
+            print("project archive 需要项目名", file=sys.stderr)
+            return 2
+        pm.archive(rest[0])
+        print(f"已归档：{rest[0]}")
+        return 0
+    if sub == "ingest":
+        """项目模式下把文档抽取产物归并入项目（P3 确定性薄壳）。
+
+        run_dir 需含宿主契约交卷 host-contract.json（文档抽取走
+        --host-contract 时保留）；归并入口 = ProjectManager.append_source。
+        """
+        p = argparse.ArgumentParser(prog="smini project ingest")
+        p.add_argument("name")
+        p.add_argument("run_dir", help="文档抽取产物目录（含 host-contract.json）")
+        args = p.parse_args(rest)
+        rd = Path(args.run_dir)
+        hc = rd / "host-contract.json"
+        if not hc.exists():
+            print(f"run_dir 缺少 host-contract.json：{rd}", file=sys.stderr)
+            print("提示：文档抽取需保留宿主契约交卷（build … --host-contract "
+                  "contract.json --extract-out …），归并按宿主契约锚点键并集",
+                  file=sys.stderr)
+            return 2
+        try:
+            contract = json.loads(hc.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            print(f"读取 host-contract.json 失败：{exc}", file=sys.stderr)
+            return 2
+        pm.append_source(args.name, f"runs/{rd.name}", contract, kind="document",
+                         meta={"doc_id": rd.name})
+        print(f"已归并 {rd.name} → 项目「{args.name}」（kind=document）")
+        return 0
+    print(f"未知 project 子命令：{sub}", file=sys.stderr)
+    return 2
+
+
+def _interview_cmd(argv: Sequence[str]) -> int:
+    """访谈控制器薄壳：interview new|append|finish|abort|summary。"""
+    from .steps.interview import InterviewController
+    from .steps.project import ProjectManager
+
+    if not argv or argv[0] in ("--help", "-h"):
+        print("用法: python -m smini.cli interview "
+              "<new|append|finish|abort|summary> [参数]")
+        return 0
+    sub, *rest = argv
+    ctl = InterviewController(ProjectManager())
+    if sub == "new":
+        p = argparse.ArgumentParser(prog="smini interview new")
+        p.add_argument("project")
+        p.add_argument("--domain", default="")
+        p.add_argument("--goal", default="")
+        p.add_argument("--force-new", action="store_true")
+        args = p.parse_args(rest)
+        s = ctl.create_session(args.project, domain=args.domain, goal=args.goal,
+                               force_new=args.force_new)
+        print(f"会话：{s['session_id']}  项目：{s['project']}  状态：{s['status']}")
+        print(f"轮次：{s['turn']}  初始覆盖：",
+              " ".join(f"{k}={v}" for k, v in s['covered'].items() if v))
+        return 0
+    if sub == "append":
+        p = argparse.ArgumentParser(prog="smini interview append")
+        p.add_argument("project")
+        p.add_argument("--user", default="", help="用户本轮回答")
+        p.add_argument("--delta", default=None, help="宿主交卷 delta JSON 路径")
+        p.add_argument("--question", default="", help="宿主下一问")
+        p.add_argument("--note", default="", help="宿主进展说明")
+        p.add_argument("--closing", action="store_true", help="宿主请求收尾")
+        p.add_argument("--materials", action="append", default=None,
+                       help="本轮混合模式读取的材料目录（可多次传）：薄壳归档到 "
+                            "runs/<runid>/materials/，本轮 delta 快照作为该文档来源的 "
+                            "抽取契约（host-contract + 04-extraction + html）并登记 "
+                            "document 来源")
+        args = p.parse_args(rest)
+        delta = {}
+        if args.delta:
+            delta = json.loads(Path(args.delta).read_text(encoding="utf-8"))
+        s = ctl.append_turn(args.project, args.user, {
+            "delta": delta, "next_question": args.question,
+            "closing": args.closing, "note": args.note},
+            materials=args.materials)
+        print(f"轮次：{s['turn']}  状态：{s['status']}")
+        print("覆盖：", " ".join(f"{k}={v}" for k, v in s['covered'].items() if v))
+        mr = (s.get("meta") or {}).get("material_runs") or []
+        if mr:
+            print("材料归档：", ", ".join(mr))
+        return 0
+    if sub == "finish":
+        if not rest:
+            print("interview finish 需要项目名", file=sys.stderr)
+            return 2
+        s = ctl.finalize(rest[0])
+        print(f"已收尾：{rest[0]} → 会话 {s['session_id']}（COMPLETE）")
+        return 0
+    if sub == "abort":
+        if not rest:
+            print("interview abort 需要项目名", file=sys.stderr)
+            return 2
+        s = ctl.abort(rest[0])
+        print(f"已中止：{rest[0]} → 会话 {s['session_id']}（ABORTED）")
+        return 0
+    if sub == "summary":
+        if not rest:
+            print("interview summary 需要项目名", file=sys.stderr)
+            return 2
+        s = ctl.summary(rest[0])
+        print(json.dumps(s, ensure_ascii=False, indent=2))
+        return 0
+    print(f"未知 interview 子命令：{sub}", file=sys.stderr)
+    return 2
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -157,6 +316,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if cmd in _RUNTIME_CMDS:
         from .runtime import run as _runtime_run
         return _runtime_run(argv)
+    if cmd == "project":
+        return _project_cmd(rest)
+    if cmd == "interview":
+        return _interview_cmd(rest)
     print(f"未知子命令：{cmd}", file=sys.stderr)
     _print_usage()
     return 2

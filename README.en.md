@@ -67,6 +67,8 @@ smini/                 # Deterministic thin shell (Python standard library, zero
 ├── sources.py         #   read-source primitives (text:// / file:// / inline; passthrough host raw_docs)
 ├── steps/extract.py   #   ★ host contract extraction (thin-shell mapping + lazy anchors)
 ├── steps/build_kg.py  #   entity-edge graph + attributes dual-placed + six-pack counts
+├── steps/project.py   #   project-layer thin shell (ProjectManager: lifecycle + source consolidation)
+├── steps/interview.py #   interview-controller thin shell (session persistence + delta merge + finalize)
 ├── llm.py             #   HostAgentLLMProvider (host-as-LLM, zero credentials)
 ├── ids.py             #   sha256 content-addressed IDs
 ├── runtime.py         #   atomic commands: ids / validate / graph build
@@ -74,9 +76,43 @@ smini/                 # Deterministic thin shell (Python standard library, zero
 └── types.py           #   data contract (dataclasses)
 contracts/             # single JSON Schema: extraction.schema.json
 skills/smini-extract/  # host-contract skill (SKILL.md + references + scripts/render_viewer.py)
-tests/                 # 126 tests
+skills/smini-interview/# interview-driven ontology building (no-document / incomplete-document source replacement)
+tests/                 # 145 tests
 docs/                  # design documents + source analysis
 ```
+
+## Interview-Driven Ontology Building (no document / incomplete document)
+
+Documents are not always available for extraction: a project may start with only what the business people hold in their heads, or the documents may lack actual practices, exceptions, role divisions. In those cases use **`smini-interview`** to build the ontology from multi-turn dialogue, producing a host contract **fully isomorphic to document extraction** (same JSON → same validate / render / graph pipeline).
+
+**A "project" is a first-class persistent unit**: every interview is attached to a project, every session starts from the project's consolidated model and merges back into it on finalize — so a project can be **supplemented by an interview at any time**.
+
+```
+projects/<project-name>/
+├── index.json                   # project registry
+├── project.json                 # consolidated model + source list + conflicts
+├── interviews/<session-id>/     # each interview (session.json + host-contract + 04-extraction.json + html)
+├── runs/<runid>/                # project-mode document extraction (same layout as runs/)
+└── 04-extraction.html           # project consolidated-model overview
+```
+
+```bash
+# New project + interview (thin-shell commands; asking/judgment/finalize is declarative in the host LLM)
+python -m smini.cli project create appropriate-management --domain finance/suitability
+python -m smini.cli interview new appropriate-management
+python -m smini.cli interview append appropriate-management --user "answer" --delta delta.json --question "next"
+python -m smini.cli interview finish appropriate-management
+
+# Supplementary interview (re-invoking continues on the consolidated model; no repeated topics)
+python -m smini.cli interview new appropriate-management
+
+# Project-mode document extraction merge
+python -m smini.cli project ingest appropriate-management runs/<runid>
+```
+
+When the host (Doubao) acts as the LLM, follow the seam in `skills/smini-interview/SKILL.md` and deliver
+`{delta, next_question, closing, note}` each turn; the thin shell only merges / persists / finalizes / consolidates —
+it never generates questions, judges coverage, or decides finalization.
 
 ## License
 

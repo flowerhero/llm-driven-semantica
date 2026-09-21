@@ -65,6 +65,8 @@ smini/                 # 确定性薄壳（Python 标准库，零依赖）
 ├── sources.py         #   读源原语（text:// / file:// / inline；透传宿主 raw_docs）
 ├── steps/extract.py   #   ★ 宿主契约抽取（薄壳映射 + 惰性锚点）
 ├── steps/build_kg.py  #   实体-边图 + 属性双落位 + 六件套 count
+├── steps/project.py   #   项目层薄壳（ProjectManager：项目生命周期 + 来源归并）
+├── steps/interview.py #   访谈控制器薄壳（会话落盘 + delta 合并 + 收尾接线）
 ├── llm.py             #   HostAgentLLMProvider（宿主即 LLM，零凭证）
 ├── ids.py             #   sha256 内容寻址 ID
 ├── runtime.py         #   原子命令：ids / validate / graph build
@@ -72,9 +74,42 @@ smini/                 # 确定性薄壳（Python 标准库，零依赖）
 └── types.py           #   数据契约（dataclass）
 contracts/             # 唯一 JSON Schema：extraction.schema.json
 skills/smini-extract/  # 宿主契约 Skill（SKILL.md + references + scripts/render_viewer.py）
-tests/                 # 126 项测试
+skills/smini-interview/# 访谈式本体构建 Skill（无文档/文档不全时的信息源替换）
+tests/                 # 测试（145 项）
 docs/                  # 设计文档 + 源码解析
 ```
+
+## 访谈式本体构建（无文档 / 文档不全时）
+
+现实里并非总有文档可供抽取：项目刚启动只有业务方脑子里的信息，或文档缺实际做法、例外情形、角色分工。此时用 **`smini-interview`** 以多轮对话为信息源，产出与文档抽取**完全同构**的宿主契约（同一张 JSON → 同一套 validate / 渲染 / 图谱）。
+
+**「项目（project）」为持久化一等单元**：访谈强制挂靠项目，会话永远从项目累计模型（consolidated）起步、收尾后归并回项目——项目建立后**随时可追加访谈**。
+
+```
+projects/<项目名>/
+├── index.json                   # 项目注册表
+├── project.json                 # 累计模型 consolidated + 来源清单 sources + 冲突 conflicts
+├── interviews/<会话id>/         # 每次访谈（session.json + host-contract + 04-extraction.json + html）
+├── runs/<runid>/                # 项目模式文档抽取（结构同现有 runs/）
+└── 04-extraction.html           # 项目累计模型总览渲染
+```
+
+```bash
+# 新建项目 + 访谈（薄壳命令；提问/判定/收尾由宿主 LLM 声明式完成）
+python -m smini.cli project create 适当性管理项目 --domain 金融/适当性
+python -m smini.cli interview new 适当性管理项目
+python -m smini.cli interview append 适当性管理项目 --user "回答" --delta delta.json --question "下一问"
+python -m smini.cli interview finish 适当性管理项目
+
+# 追加访谈（再次调起 = 在累计模型上继续，不重复已覆盖主题）
+python -m smini.cli interview new 适当性管理项目
+
+# 项目模式文档抽取归并
+python -m smini.cli project ingest 适当性管理项目 runs/<runid>
+```
+
+宿主（豆包）充当 LLM 时的实际用法：按 `skills/smini-interview/SKILL.md` 的接缝，每轮交卷
+`{delta, next_question, closing, note}`；薄壳只做合并/落盘/收尾接线/归并——不生成问题、不判断覆盖度、不决定收尾。
 
 ## 许可
 

@@ -1,0 +1,110 @@
+{
+  "_说明": "smini-interview 宿主交卷模板（会话 JSON 示例）。前两段展示薄壳产出的会话状态（初始 = 项目累计模型），后一段展示宿主每轮交卷的 delta 格式。字段表与判定规则见 smini-extract/SKILL.md 与 references/extraction-rules.md，本文件不复制规范。",
+  "session_example": {
+    "session_id": "ivw_8f3a2c1e9b7d",
+    "project": "适当性管理项目",
+    "project_ref": "适当性管理项目",
+    "domain": "金融/适当性",
+    "goal": "为适当性管理制度建立可预测/可决策的本体模型",
+    "status": "OPEN",
+    "turn": 2,
+    "model_draft": {
+      "entities": [
+        {"surface": "证券经营机构", "canonical": "证券经营机构", "type": "ORGANIZATION"},
+        {"surface": "投资者", "canonical": "投资者", "type": "CONCEPT"}
+      ],
+      "relations": [
+        {"subject": "证券经营机构", "predicate": "对", "object": "投资者",
+         "object_type": "CONCEPT", "evidence": "证券经营机构应当对投资者履行适当性管理义务",
+         "prop_kind": "DEPENDENCY"}
+      ],
+      "attributes": [],
+      "rules": [],
+      "processes": [],
+      "states": [],
+      "functions": [],
+      "temporal": [],
+      "actions": [],
+      "constraints": [],
+      "permissions": [],
+      "document_meta": {"domain": "金融/适当性", "source": "interview://适当性管理项目"}
+    },
+    "covered": {"entities": 2, "relations": 1, "attributes": 0, "rules": 0,
+                "processes": 0, "states": 0, "functions": 0, "temporal": 0,
+                "actions": 0, "constraints": 0, "permissions": 0},
+    "agenda": [
+      {"topic": "投资者属性", "priority": "high", "reason": "缺口最大：covered.attributes=0"},
+      {"topic": "业务规则", "priority": "high", "reason": "适当性制度必有应当/不得规范"}
+    ],
+    "asked": ["证券经营机构对投资者承担哪些适当性义务？"],
+    "history": [
+      {"role": "user", "text": "证券经营机构应当对投资者履行适当性管理义务。"},
+      {"role": "host", "text": "已记录 2 个实体、1 条关系。", "delta": {
+        "entities": [
+          {"surface": "证券经营机构", "canonical": "证券经营机构", "type": "ORGANIZATION"},
+          {"surface": "投资者", "canonical": "投资者", "type": "CONCEPT"}
+        ],
+        "relations": [
+          {"subject": "证券经营机构", "predicate": "对", "object": "投资者",
+           "object_type": "CONCEPT",
+           "evidence": "证券经营机构应当对投资者履行适当性管理义务",
+           "prop_kind": "DEPENDENCY"}
+        ]
+      }}
+    ],
+    "conflicts": [],
+    "meta": {"created_at": "2026-09-20T10:00:00+08:00",
+             "updated_at": "2026-09-20T10:05:00+08:00", "source": "interview"}
+  },
+  "host_append_example": {
+    "_说明": "宿主每轮 append_turn 的 host 交卷：delta 只含本轮新增/修改条目；next_question 满足 R1-R6；closing=true 前先给用户'还有要补充的吗'的机会。",
+    "delta": {
+      "attributes": [
+        {"entity": "投资者", "name": "风险承受能力等级", "value": "五级",
+         "value_type": "ENUM",
+         "evidence": "投资者风险承受能力等级由低到高划分为五级", "required": true}
+      ],
+      "rules": [
+        {"subject": "证券经营机构", "condition": "投资者风险承受能力等级发生变化",
+         "action": "书面风险警示并重新评估匹配", "modality": "OBLIGATION",
+         "evidence": "应当及时进行书面风险警示并重新评估匹配",
+         "rule_type": "TRIGGER", "certainty": "ENTERPRISE"}
+      ]
+    },
+    "next_question": "风险承受能力等级从低到高具体分为哪几级？（用于补全状态机 states）——因为等级是后续规则和匹配逻辑的输入。",
+    "closing": false,
+    "note": "已记录 1 个属性、1 条规则。"
+  },
+  "finalize_contract_example": {
+    "_说明": "收尾时薄壳把 model_draft 落盘为 host-contract.json（source 强制 interview://<项目名>），与文档抽取产物完全同构。",
+    "entities": [
+      {"surface": "证券经营机构", "canonical": "证券经营机构", "type": "ORGANIZATION"},
+      {"surface": "投资者", "canonical": "投资者", "type": "CONCEPT"}
+    ],
+    "relations": [
+      {"subject": "证券经营机构", "predicate": "对", "object": "投资者",
+       "object_type": "CONCEPT",
+       "evidence": "证券经营机构应当对投资者履行适当性管理义务",
+       "prop_kind": "DEPENDENCY"}
+    ],
+    "attributes": [
+      {"entity": "投资者", "name": "风险承受能力等级", "value": "五级",
+       "value_type": "ENUM",
+       "evidence": "投资者风险承受能力等级由低到高划分为五级", "required": true}
+    ],
+    "rules": [
+      {"subject": "证券经营机构", "condition": "投资者风险承受能力等级发生变化",
+       "action": "书面风险警示并重新评估匹配", "modality": "OBLIGATION",
+       "evidence": "应当及时进行书面风险警示并重新评估匹配",
+       "rule_type": "TRIGGER", "certainty": "ENTERPRISE"}
+    ],
+    "processes": [],
+    "states": [],
+    "functions": [],
+    "temporal": [],
+    "actions": [],
+    "constraints": [],
+    "permissions": [],
+    "document_meta": {"domain": "金融/适当性", "source": "interview://适当性管理项目"}
+  }
+}

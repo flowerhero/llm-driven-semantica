@@ -54,8 +54,9 @@ def _norm(data: dict) -> tuple[list, list, list, list, list]:
     rules: list[dict] = []
     processes: list[dict] = []
 
-    if data.get("entities") and data.get("relations"):
-        # 契约格式：attributes / rules / processes 可能缺失（旧契约向后兼容）
+    if isinstance(data.get("entities"), list):
+        # 契约格式：attributes / rules / processes 可能缺失（旧契约向后兼容）；
+        # entities/relations 允许任一侧为空（访谈早期产物可能只有 entities 或只有 relations）
         attributes = list(data.get("attributes") or [])
         rules = list(data.get("rules") or [])
         processes = [_norm_process(p) for p in (data.get("processes") or [])]
@@ -259,6 +260,18 @@ def _meta_line(meta: dict) -> str:
             parts.append(f"{label}：{v}")
     return " · ".join(parts)
 
+
+def _source_line(meta: dict) -> str:
+    """按 document_meta.source 区分建模管线来源（访谈/文档/项目累计），空则向后兼容。"""
+    src = str(meta.get("source") or "")
+    if src.startswith("interview://"):
+        return "smini-interview 访谈建模结果 · 宿主 agent 多轮访谈交卷 · Python 薄壳端到端运行"
+    if src.startswith("project://"):
+        return "smini-interview 项目累计模型总览 · 多来源归并（访谈+文档） · Python 薄壳端到端运行"
+    if src.startswith("document://"):
+        return "smini-extract 文档抽取结果 · 宿主 agent 按契约交卷 · Python 薄壳端到端运行"
+    return "smini-extract 抽取结果 · 宿主 agent 按契约交卷 · Python 薄壳端到端运行"
+
 TYPE_COLOR = {
     "PERSON": "#C0392B", "ORGANIZATION": "#3E7CB1", "LOCATION": "#16A085",
     "DATE": "#2F9E78", "TIME": "#7D8C9E", "MONEY": "#B7950B",
@@ -366,7 +379,7 @@ _HTML_TPL = """<!DOCTYPE html>
   h1{font-size:20px;font-weight:600;margin-bottom:4px;}
   .sub{color:var(--sub);font-size:13px;margin-bottom:20px;}
   .cards{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;}
-  .card{flex:1 1 150px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
+  .card{flex:1 1 0;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;}
   .card .num{font-size:24px;font-weight:600;color:var(--accent);}
   .card .lab{font-size:12px;color:var(--sub);margin-top:2px;}
   .dist{display:flex;gap:6px;height:10px;border-radius:6px;overflow:hidden;margin-bottom:20px;}
@@ -406,7 +419,7 @@ _HTML_TPL = """<!DOCTYPE html>
 <body>
 <div class="wrap">
   <h1>__TITLE__</h1>
-  <div class="sub">来源：smini-extract 抽取结果 · 宿主 agent 按契约交卷 · Python 薄壳端到端运行（__SUMM__）</div>
+  <div class="sub">来源：__SRC__（__SUMM__）</div>
   <div class="sub" id="meta" style="font-size:12px;">__META__</div>
   <div class="sub" id="summ6" style="font-size:12px;">__SUMM6__</div>
   <div class="cards">
@@ -1504,6 +1517,7 @@ def _render(entities, relations, attributes, rules, processes, title: str,
             .replace("__NT__", str(len(type_keys)))
             .replace("__NL__", str(literal_cnt))
             .replace("__SUMM6__", summ6)
+            .replace("__SRC__", _source_line(meta or {}))
             .replace("__META__", _meta_line(meta or {}))
             .replace("__SUMM__", f"{len(entities)} 实体 / {len(relations)} 关系 / "
                                  f"{len(attributes)} 属性 / {len(rules)} 规则 / "
@@ -1532,8 +1546,9 @@ def main(argv: list[str] | None = None) -> int:
 
     entities, relations, attributes, rules, processes = _norm(data)
     six = _norm_six(data)
-    if not entities and not relations:
-        print("[render_viewer] 未识别到实体/关系数据（需 entities/relations 或 mentions/triplets）",
+    if not entities and not relations and not attributes and not rules \
+            and not processes and not any(six.values()):
+        print("[render_viewer] 无任何可渲染数据（实体/关系/属性/规则/流程/六件套全为空）",
               file=sys.stderr)
         return 2
 
